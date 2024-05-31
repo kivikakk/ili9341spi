@@ -1,0 +1,25 @@
+name: Unit tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Set up Chryse
+      uses: chryse-hdl/setup-chryse-action@v2.3
+      with:
+        source-ref: main
+
+    - name: Run tests
+      run: sbt test
