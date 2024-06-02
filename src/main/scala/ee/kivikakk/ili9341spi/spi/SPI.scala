@@ -11,7 +11,7 @@ class SPIPinsIO extends Bundle {
 }
 
 class SPIRequest extends Bundle {
-  val cmd     = UInt(8.W)
+  val data    = UInt(8.W)
   val dc      = Bool()
   val respLen = UInt(4.W)
 }
@@ -51,7 +51,7 @@ class SPI extends Module {
     is(State.sIdle) {
       io.req.ready := true.B
       when(io.req.valid) {
-        srReg         := io.req.bits.cmd
+        srReg         := io.req.bits.data
         dcReg         := io.req.bits.dc
         bitRemReg     := 7.U
         sndByteRemReg := io.req.bits.respLen

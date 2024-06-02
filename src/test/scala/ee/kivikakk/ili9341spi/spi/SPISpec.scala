@@ -15,7 +15,7 @@ class SPISpec extends AnyFlatSpec {
       c.pins.clk.expect(false.B, s"snd pins.clk @ $byteIx")
       c.io.req.ready.expect(true.B)
 
-      c.io.req.bits.cmd.poke((byte & 0xff).U)
+      c.io.req.bits.data.poke((byte & 0xff).U)
       c.io.req.bits.dc.poke((byteIx == 0).B)
       c.io.req.bits.respLen
         .poke(if (byteIx == bytes.length - 1) rcvCnt.U else 0.U)
