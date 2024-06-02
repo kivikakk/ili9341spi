@@ -23,8 +23,9 @@ class ILIIO extends Bundle {
 class Top(implicit platform: Platform) extends Module {
   override def desiredName = "ili9341spi"
 
-  val ili = Wire(new ILIIO)
-  ili.res := false.B
+  val ili    = Wire(new ILIIO)
+  val resReg = RegInit(false.B)
+  ili.res := resReg
   ili.blk := true.B
 
   val spi = Module(new SPI)
@@ -57,13 +58,25 @@ class Top(implicit platform: Platform) extends Module {
 
   switch(state) {
     is(State.sIdle) {
-      when(fire =/= 0.U & spi.io.req.ready) {
-        spi.io.req.bits.cmd     := SPICommand.READ_ID1 - 1.U + fire
+      when(fire === 0xfe.U) {
+        resReg           := true.B
+        uart.io.tx.bits  := 0x01.U
+        uart.io.tx.valid := true.B
+        fire             := 0.U
+      }
+      when(fire === 0xfd.U) {
+        resReg           := false.B
+        uart.io.tx.bits  := 0x00.U
+        uart.io.tx.valid := true.B
+        fire             := 0.U
+      }
+      when(fire =/= 0.U & fire < 0xfd.U & spi.io.req.ready) {
+        spi.io.req.bits.cmd     := fire
         spi.io.req.bits.dc      := true.B
-        spi.io.req.bits.respLen := 1.U
+        spi.io.req.bits.respLen := 2.U
         spi.io.req.valid        := true.B
 
-        uart.io.tx.bits  := SPICommand.READ_ID1 - 1.U + fire
+        uart.io.tx.bits  := fire
         uart.io.tx.valid := true.B
 
         fire := 0.U
