@@ -60,6 +60,8 @@ class Top(implicit platform: Platform) extends Module {
   val initCmdRemReg = Reg(
     UInt(unsignedBitLength(LCDInit.sequence.map(_._2.length).max).W),
   )
+  // We spend quite a few cells on this. TODO (Chryse): BRAM init.
+  // Cbf putting every initted memory on SPI flash.
   val rom = VecInit(LCDInit.rom)
 
   switch(state) {
