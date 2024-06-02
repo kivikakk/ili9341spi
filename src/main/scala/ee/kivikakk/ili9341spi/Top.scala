@@ -8,7 +8,6 @@ import ee.hrzn.chryse.platform.Platform
 import ee.hrzn.chryse.platform.cxxrtl.CXXRTLPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
 import ee.kivikakk.ili9341spi.spi.SPI
-import ee.kivikakk.ili9341spi.spi.SPICommand
 import ee.kivikakk.ili9341spi.spi.SPIRequest
 
 class ILIIO extends Bundle {
@@ -24,7 +23,7 @@ class Top(implicit platform: Platform) extends Module {
   override def desiredName = "ili9341spi"
 
   val ili    = Wire(new ILIIO)
-  val resReg = RegInit(false.B)
+  val resReg = RegInit(true.B) // start with reset on.
   ili.res := resReg
   ili.blk := true.B
 
@@ -52,11 +51,32 @@ class Top(implicit platform: Platform) extends Module {
   uart.io.tx :<>= spi.io.resp
 
   object State extends ChiselEnum {
-    val sIdle = Value
+    val sResetApply, sResetWait, sIdle = Value
   }
-  val state = RegInit(State.sIdle)
+  val state         = RegInit(State.sResetApply)
+  val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
+  val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
+  val resTimerReg   = RegInit(resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W))
 
   switch(state) {
+    is(State.sResetApply) {
+      resTimerReg := resTimerReg - 1.U
+      when(resTimerReg === 0.U) {
+        resReg           := false.B
+        uart.io.tx.bits  := 0x76.U
+        uart.io.tx.valid := true.B
+        resTimerReg      := resetWaitCyc.U
+        state            := State.sResetWait
+      }
+    }
+    is(State.sResetWait) {
+      resTimerReg := resTimerReg - 1.U
+      when(resTimerReg === 0.U) {
+        uart.io.tx.bits  := 0x77.U
+        uart.io.tx.valid := true.B
+        state            := State.sIdle
+      }
+    }
     is(State.sIdle) {
       when(fire === 0xfe.U) {
         resReg           := true.B
