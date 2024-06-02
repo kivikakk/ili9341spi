@@ -40,7 +40,7 @@ class SPI extends Module {
   io.resp.valid := false.B
 
   object State extends ChiselEnum {
-    val sIdle, sSndLow, sSndHigh, sRcvLow, sRcvHigh = Value
+    val sIdle, sSndLow, sSndHigh, sRcvLow, sRcvHigh, sRcvDone = Value
   }
   val state = RegInit(State.sIdle)
 
@@ -82,14 +82,19 @@ class SPI extends Module {
       bitRemReg := bitRemReg - 1.U
 
       when(bitRemReg === 0.U) {
-        // TODO: to test. Is it more expensive to use srNext here, instead of
-        // waiting an extra cycle and setting bits from srReg instead?
-        io.resp.bits  := srNext
-        io.resp.valid := true.B
-        bitRemReg     := 7.U
-        sndByteRemReg := sndByteRemReg - 1.U
+        bitRemReg := 7.U
+        state     := State.sRcvDone
+      }
+    }
+    is(State.sRcvDone) {
+      io.resp.bits  := srReg
+      io.resp.valid := true.B
+      sndByteRemReg := sndByteRemReg - 1.U
 
-        state := Mux(sndByteRemReg =/= 0.U, State.sRcvLow, State.sIdle)
+      when(sndByteRemReg === 0.U) {
+        state := State.sIdle
+      }.otherwise {
+        state := State.sRcvHigh
       }
     }
   }

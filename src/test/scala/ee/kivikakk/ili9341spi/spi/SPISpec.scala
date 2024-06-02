@@ -56,13 +56,11 @@ class SPISpec extends AnyFlatSpec {
         c.clock.step()
         c.pins.clk.expect(true.B)
 
-        if (bitIx == 7) {
-          c.io.resp.valid.expect(true.B, s"rcv resp.valid @ $byteIx")
-          c.io.resp.bits.expect((byte & 0xff).U, s"rcv resp.bits @ $byteIx")
-        }
-
         c.clock.step()
       }
+
+      c.io.resp.valid.expect(true.B, s"rcv resp.valid @ $byteIx")
+      c.io.resp.bits.expect((byte & 0xff).U, s"rcv resp.bits @ $byteIx")
     }
 
     c.clock.step()
