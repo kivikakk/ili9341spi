@@ -69,6 +69,7 @@ class SPI extends Module {
       when(bitRemReg === 0.U) {
         bitRemReg     := 7.U
         sndByteRemReg := sndByteRemReg - 1.U
+        dcReg         := false.B
         state         := Mux(sndByteRemReg =/= 0.U, State.sRcvLow, State.sIdle)
       }
     }

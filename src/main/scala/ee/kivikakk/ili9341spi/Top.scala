@@ -42,30 +42,31 @@ class Top(implicit platform: Platform) extends Module {
   uart.io.tx.bits  := 0.U
   uart.io.tx.valid := false.B
 
-  val fire = WireInit(false.B)
-
-  when(uart.io.rx.valid) {
+  val fire = RegInit(0.U(8.W))
+  when(uart.io.rx.valid & ~uart.io.rx.bits.err) {
     uart.io.rx.ready := true.B
-    fire             := true.B
+    fire             := uart.io.rx.bits.byte
   }
 
+  uart.io.tx :<>= spi.io.resp
+
   object State extends ChiselEnum {
-    val sIdle, sFire = Value
+    val sIdle = Value
   }
   val state = RegInit(State.sIdle)
 
   switch(state) {
     is(State.sIdle) {
-      state := Mux(fire, State.sFire, State.sIdle)
-    }
-    is(State.sFire) {
-      when(spi.io.req.ready) {
-        spi.io.req.bits := new SPIRequest().Lit(
-          _.cmd     -> SPICommand.READ_DISPLAY_ID,
-          _.dc      -> true.B,
-          _.respLen -> 3.U,
-        )
-        spi.io.req.valid := true.B
+      when(fire =/= 0.U & spi.io.req.ready) {
+        spi.io.req.bits.cmd     := SPICommand.READ_ID1 - 1.U + fire
+        spi.io.req.bits.dc      := true.B
+        spi.io.req.bits.respLen := 1.U
+        spi.io.req.valid        := true.B
+
+        uart.io.tx.bits  := SPICommand.READ_ID1 - 1.U + fire
+        uart.io.tx.valid := true.B
+
+        fire := 0.U
       }
     }
   }
