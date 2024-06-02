@@ -22,53 +22,73 @@ class SPIIO extends Bundle {
 }
 
 class SPI extends Module {
-  val outSr = Reg(UInt(8.W))
-  val dcReg = Reg(Bool())
+  val io = IO(new SPIIO)
 
-  val io   = IO(new SPIIO)
   val pins = IO(new SPIPinsIO)
+  pins.clk := false.B
 
-  pins.clk  := false.B
-  pins.copi := outSr(7)
-  pins.dc   := dcReg
+  val dcReg = Reg(Bool())
+  pins.dc := dcReg
+
+  val srNext = Wire(UInt(8.W))
+  val srReg  = RegEnable(srNext, pins.clk)
+  srNext    := srReg(6, 0) ## pins.cipo
+  pins.copi := srReg(7)
 
   io.req.ready  := false.B
   io.resp.bits  := 0.U
   io.resp.valid := false.B
 
   object State extends ChiselEnum {
-    val sIdle, sLow, sHigh = Value
+    val sIdle, sSndLow, sSndHigh, sRcvLow, sRcvHigh = Value
   }
   val state = RegInit(State.sIdle)
 
-  val outBitRemReg   = Reg(UInt(3.W))
-  val respByteRemReg = Reg(UInt(4.W))
+  val bitRemReg     = Reg(UInt(3.W))
+  val sndByteRemReg = Reg(UInt(4.W))
 
   switch(state) {
     is(State.sIdle) {
       io.req.ready := true.B
       when(io.req.valid) {
-        outSr          := io.req.bits.cmd
-        dcReg          := io.req.bits.dc
-        outBitRemReg   := 7.U
-        respByteRemReg := io.req.bits.respLen
-        state          := State.sLow
+        srReg         := io.req.bits.cmd
+        dcReg         := io.req.bits.dc
+        bitRemReg     := 7.U
+        sndByteRemReg := io.req.bits.respLen
+        state         := State.sSndLow
       }
     }
-    is(State.sLow) {
-      state := State.sHigh
+    is(State.sSndLow) {
+      state := State.sSndHigh
     }
-    is(State.sHigh) {
-      pins.clk     := true.B
-      state        := State.sLow
-      outSr        := outSr(6, 0) ## 0.U(1.W)
-      outBitRemReg := outBitRemReg - 1.U
+    is(State.sSndHigh) {
+      pins.clk  := true.B
+      state     := State.sSndLow
+      bitRemReg := bitRemReg - 1.U
 
-      when(
-        outBitRemReg === 0.U &
-          respByteRemReg === 0.U,
-      ) {
-        state := State.sIdle
+      when(bitRemReg === 0.U) {
+        bitRemReg     := 7.U
+        sndByteRemReg := sndByteRemReg - 1.U
+        state         := Mux(sndByteRemReg =/= 0.U, State.sRcvLow, State.sIdle)
+      }
+    }
+    is(State.sRcvLow) {
+      state := State.sRcvHigh
+    }
+    is(State.sRcvHigh) {
+      pins.clk  := true.B
+      state     := State.sRcvLow
+      bitRemReg := bitRemReg - 1.U
+
+      when(bitRemReg === 0.U) {
+        // TODO: to test. Is it more expensive to use srNext here, instead of
+        // waiting an extra cycle and setting bits from srReg instead?
+        io.resp.bits  := srNext
+        io.resp.valid := true.B
+        bitRemReg     := 7.U
+        sndByteRemReg := sndByteRemReg - 1.U
+
+        state := Mux(sndByteRemReg =/= 0.U, State.sRcvLow, State.sIdle)
       }
     }
   }
