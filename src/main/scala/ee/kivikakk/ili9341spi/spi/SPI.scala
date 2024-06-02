@@ -12,7 +12,7 @@ class SPIPinsIO extends Bundle {
 
 class SPIRequest extends Bundle {
   val cmd     = UInt(8.W)
-  val cmdRem  = UInt(4.W)
+  val dc      = Bool()
   val respLen = UInt(4.W)
 }
 
@@ -42,7 +42,6 @@ class SPI extends Module {
   val state = RegInit(State.sIdle)
 
   val outBitRemReg   = Reg(UInt(3.W))
-  val outByteRemReg  = Reg(UInt(4.W))
   val respByteRemReg = Reg(UInt(4.W))
 
   switch(state) {
@@ -50,9 +49,8 @@ class SPI extends Module {
       io.req.ready := true.B
       when(io.req.valid) {
         outSr          := io.req.bits.cmd
-        dcReg          := true.B
+        dcReg          := io.req.bits.dc
         outBitRemReg   := 7.U
-        outByteRemReg  := io.req.bits.cmdRem
         respByteRemReg := io.req.bits.respLen
         state          := State.sLow
       }
@@ -68,7 +66,6 @@ class SPI extends Module {
 
       when(
         outBitRemReg === 0.U &
-          outByteRemReg === 0.U &
           respByteRemReg === 0.U,
       ) {
         state := State.sIdle

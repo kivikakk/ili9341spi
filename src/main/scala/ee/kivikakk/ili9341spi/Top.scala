@@ -62,7 +62,7 @@ class Top(implicit platform: Platform) extends Module {
       when(spi.io.req.ready) {
         spi.io.req.bits := new SPIRequest().Lit(
           _.cmd     -> SPICommand.READ_DISPLAY_ID,
-          _.cmdRem  -> 0.U,
+          _.dc      -> true.B,
           _.respLen -> 3.U,
         )
         spi.io.req.valid := true.B
