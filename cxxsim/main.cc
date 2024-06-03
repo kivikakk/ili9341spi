@@ -4,9 +4,9 @@
 #include <optional>
 
 #include <cxxrtl/cxxrtl_vcd.h>
-#include <newproject.h>
+#include <ili9341spi.h>
 
-static cxxrtl_design::p_newproject top;
+static cxxrtl_design::p_ili9341spi top;
 static cxxrtl::vcd_writer vcd;
 static uint64_t vcd_time = 0;
 
@@ -42,28 +42,29 @@ int main(int argc, char **argv) {
 
   top.p_reset.set(false);
 
-  // ledr should be low or high according to 'expected', where each element
-  // represents 1/4th of a second. ledg should always be high.
-  //
-  // This mirrors the TopSpec test in Scala.
+  // // ledr should be low or high according to 'expected', where each element
+  // // represents 1/4th of a second. ledg should always be high.
+  // //
+  // // This mirrors the TopSpec test in Scala.
   int rc = 0;
-  bool done = false;
+  // bool done = false;
 
-  std::vector<int> expected = {0, 1, 1, 0, 0, 1, 1, 0};
-  for (std::vector<int>::size_type i = 0; i < expected.size() && !done; ++i) {
-    for (int j = 0; j < (CLOCK_HZ / 4); ++j) {
-      if (top.p_io__ledr.get<int>() != expected[i]) {
-        std::cerr << "unexpected ledr at i(" << i << "), j(" << j << ")"
-                  << std::endl;
-        rc = 1;
-        done = true;
-        break;
-      }
-      assert(top.p_io__ledg);
+  // std::vector<int> expected = {0, 1, 1, 0, 0, 1, 1, 0};
+  // for (std::vector<int>::size_type i = 0; i < expected.size() && !done; ++i)
+  // {
+  //   for (int j = 0; j < (CLOCK_HZ / 4); ++j) {
+  //     if (top.p_io__ledr.get<int>() != expected[i]) {
+  //       std::cerr << "unexpected ledr at i(" << i << "), j(" << j << ")"
+  //                 << std::endl;
+  //       rc = 1;
+  //       done = true;
+  //       break;
+  //     }
+  //     assert(top.p_io__ledg);
 
-      step();
-    }
-  }
+  //     step();
+  //   }
+  // }
 
   std::cout << "finished on cycle " << (vcd_time >> 1) << std::endl;
 

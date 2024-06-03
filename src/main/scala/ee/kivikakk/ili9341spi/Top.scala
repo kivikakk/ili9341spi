@@ -5,6 +5,7 @@ import chisel3.util._
 import ee.hrzn.athena.uart.UART
 import ee.hrzn.chryse.platform.Platform
 import ee.hrzn.chryse.platform.cxxrtl.CXXRTLPlatform
+import ee.hrzn.chryse.platform.ecp5.ULX3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
 import ee.kivikakk.ili9341spi.spi.LCDInit
 import ee.kivikakk.ili9341spi.spi.SPI
@@ -155,9 +156,15 @@ class Top(implicit platform: Platform) extends Module {
       plat.resources.uart.tx := uart.pins.tx
       uart.pins.rx           := plat.resources.uart.rx
 
+    case plat: ULX3SPlatform =>
+      ili.cipo     := false.B
+      uart.pins.rx := false.B
+
     case plat: CXXRTLPlatform =>
       val io = IO(new ILIIO)
       io :<>= ili
+
+      uart.pins.rx := false.B
 
     case _ =>
   }
