@@ -1,12 +1,13 @@
-package ee.kivikakk.ili9341spi.spi
+package ee.kivikakk.ili9341spi.lcd
 
 import chisel3._
-import ee.kivikakk.ili9341spi.spi.LCDCommand._
 
 import java.awt.Color
 import java.io.File
 import javax.imageio.ImageIO
 import scala.collection.mutable
+
+import LCDCommand._
 
 object LCDInit {
   val sequence: Seq[(LCDCommand.Type, Seq[UInt])] = Seq(

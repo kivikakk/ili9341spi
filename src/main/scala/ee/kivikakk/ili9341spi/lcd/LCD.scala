@@ -1,30 +1,30 @@
-package ee.kivikakk.ili9341spi.spi
+package ee.kivikakk.ili9341spi.lcd
 
 import chisel3._
 import chisel3.util._
 
-class SPIPinsIO extends Bundle {
+class LCDPinsIO extends Bundle {
   val clk  = Output(Bool())
   val copi = Output(Bool())
   val cipo = Input(Bool())
   val dc   = Output(Bool())
 }
 
-class SPIRequest extends Bundle {
+class LCDRequest extends Bundle {
   val data    = UInt(8.W)
   val dc      = Bool()
   val respLen = UInt(4.W)
 }
 
-class SPIIO extends Bundle {
-  val req  = Flipped(Decoupled(new SPIRequest))
+class LCDIO extends Bundle {
+  val req  = Flipped(Decoupled(new LCDRequest))
   val resp = Decoupled(UInt(8.W))
 }
 
-class SPI extends Module {
-  val io = IO(new SPIIO)
+class LCD extends Module {
+  val io = IO(new LCDIO)
 
-  val pins = IO(new SPIPinsIO)
+  val pins = IO(new LCDPinsIO)
   pins.clk := false.B
 
   val dcReg = Reg(Bool())

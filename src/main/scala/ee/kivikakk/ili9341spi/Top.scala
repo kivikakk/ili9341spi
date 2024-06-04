@@ -7,9 +7,9 @@ import ee.hrzn.chryse.platform.Platform
 import ee.hrzn.chryse.platform.cxxrtl.CXXRTLPlatform
 import ee.hrzn.chryse.platform.ecp5.ULX3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
-import ee.kivikakk.ili9341spi.spi.LCDInit
-import ee.kivikakk.ili9341spi.spi.SPI
-import ee.kivikakk.ili9341spi.spi.SPIRequest
+import ee.kivikakk.ili9341spi.lcd.LCD
+import ee.kivikakk.ili9341spi.lcd.LCDInit
+import ee.kivikakk.ili9341spi.lcd.LCDRequest
 
 class ILIIO extends Bundle {
   val clk  = Output(Bool())
@@ -28,18 +28,18 @@ class Top(implicit platform: Platform) extends Module {
   ili.res := resReg
   ili.blk := true.B
 
-  val spi = Module(new SPI)
-  ili.clk       := spi.pins.clk
-  ili.copi      := spi.pins.copi
-  ili.dc        := spi.pins.dc
-  spi.pins.cipo := ili.cipo // FF sync?
+  val lcd = Module(new LCD)
+  ili.clk       := lcd.pins.clk
+  ili.copi      := lcd.pins.copi
+  ili.dc        := lcd.pins.dc
+  lcd.pins.cipo := ili.cipo // FF sync?
 
-  spi.io.req.noenq()
-  spi.io.resp.nodeq()
+  lcd.io.req.noenq()
+  lcd.io.resp.nodeq()
 
   val uart = Module(new UART(baud = 115200))
   uart.io.rx.nodeq()
-  uart.io.tx :<>= spi.io.resp
+  uart.io.tx :<>= lcd.io.resp
 
   object State extends ChiselEnum {
     val sResetApply, sResetWait, sInitCmd, sInitParam, sWriteImg, sIdle = Value
@@ -77,13 +77,13 @@ class Top(implicit platform: Platform) extends Module {
     }
     is(State.sInitCmd) {
       when(initRomIxReg =/= initRomLen.U) {
-        val req = Wire(new SPIRequest())
+        val req = Wire(new LCDRequest())
         req.data    := initRom(initRomIxReg)
         req.dc      := true.B
         req.respLen := 0.U
-        spi.io.req.enq(req)
+        lcd.io.req.enq(req)
 
-        when(spi.io.req.fire) {
+        when(lcd.io.req.fire) {
           initRomIxReg  := initRomIxReg + 2.U
           initCmdRemReg := initRom(initRomIxReg + 1.U)
 
@@ -101,13 +101,13 @@ class Top(implicit platform: Platform) extends Module {
     }
     is(State.sInitParam) {
       when(initCmdRemReg =/= 0.U) {
-        val req = Wire(new SPIRequest)
+        val req = Wire(new LCDRequest)
         req.data    := initRom(initRomIxReg)
         req.dc      := false.B
         req.respLen := 0.U
-        spi.io.req.enq(req)
+        lcd.io.req.enq(req)
 
-        when(spi.io.req.fire) {
+        when(lcd.io.req.fire) {
           initRomIxReg  := initRomIxReg + 1.U
           initCmdRemReg := initCmdRemReg - 1.U
         }
@@ -118,13 +118,13 @@ class Top(implicit platform: Platform) extends Module {
     }
     is(State.sWriteImg) {
       when(pngRomOffReg =/= pngRomLen.U) {
-        val req = Wire(new SPIRequest)
+        val req = Wire(new LCDRequest)
         req.data    := pngRom(pngRomOffReg)
         req.dc      := false.B
         req.respLen := 0.U
-        spi.io.req.enq(req)
+        lcd.io.req.enq(req)
 
-        when(spi.io.req.fire) {
+        when(lcd.io.req.fire) {
           pngRomOffReg := pngRomOffReg + 1.U
         }
       }.otherwise {

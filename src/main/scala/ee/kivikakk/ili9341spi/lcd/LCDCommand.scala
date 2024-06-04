@@ -1,4 +1,4 @@
-package ee.kivikakk.ili9341spi.spi
+package ee.kivikakk.ili9341spi.lcd
 
 import chisel3._
 
