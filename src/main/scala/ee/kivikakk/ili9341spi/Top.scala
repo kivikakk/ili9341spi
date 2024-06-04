@@ -56,9 +56,8 @@ class Top(implicit platform: Platform) extends Module {
   val pngRomLen    = LCDInit.pngrom.length
   val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
-  // Cbf putting every initted memory on SPI flash.
+  // Cbf putting every tiny initted memory on SPI flash.
   val initRom = VecInit(LCDInit.rom)
-  val pngRom  = VecInit(LCDInit.pngrom)
 
   switch(state) {
     is(State.sResetApply) {
@@ -119,7 +118,8 @@ class Top(implicit platform: Platform) extends Module {
     is(State.sWriteImg) {
       when(pngRomOffReg =/= pngRomLen.U) {
         val req = Wire(new LCDRequest)
-        req.data    := pngRom(pngRomOffReg)
+        req.data := 0xff.U
+        // req.data    := pngRom(pngRomOffReg)
         req.dc      := false.B
         req.respLen := 0.U
         lcd.io.req.enq(req)

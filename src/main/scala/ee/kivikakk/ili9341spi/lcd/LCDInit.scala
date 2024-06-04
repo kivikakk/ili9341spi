@@ -45,7 +45,7 @@ object LCDInit {
     (WRITE_MEMORY_CONTINUE, Seq()),
   )
 
-  val rom: Seq[UInt] = {
+  lazy val rom: Seq[UInt] = {
     val rom = mutable.ArrayBuffer[UInt]()
     for { (cmd, params) <- sequence } {
       rom  += cmd.asUInt
@@ -55,24 +55,20 @@ object LCDInit {
     rom.toSeq
   }
 
-  val pngrom: Seq[UInt] = {
+  val pngrom: Array[Byte] = {
     val png    = ImageIO.read(new File("jjr.png"))
-    val nyonks = mutable.ArrayBuffer[UInt]()
+    val nyonks = mutable.ArrayBuffer[Byte]()
     for {
-      y <- 0 until 10
+      y <- 0 until 240
       x <- 0 until 320
     } {
       val rgb = new Color(png.getRGB(x, y))
       // 565
+      nyonks.append(((rgb.getRed() & 0xf8) | (rgb.getGreen() >> 5)).toByte)
       nyonks.append(
-        ((rgb.getRed() & 0xf8) |
-          (rgb.getGreen() >> 5)).U(8.W),
-      )
-      nyonks.append(
-        (((rgb.getGreen() & 0x1c) << 3) |
-          (rgb.getBlue() >> 3)).U(8.W),
+        (((rgb.getGreen() & 0x1c) << 3) | (rgb.getBlue() >> 3)).toByte,
       )
     }
-    nyonks.toSeq
+    nyonks.toArray
   }
 }
