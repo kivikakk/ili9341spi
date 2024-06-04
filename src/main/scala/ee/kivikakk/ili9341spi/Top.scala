@@ -9,6 +9,7 @@ import ee.hrzn.chryse.platform.ecp5.ULX3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
 import ee.kivikakk.ili9341spi.spi.LCDInit
 import ee.kivikakk.ili9341spi.spi.SPI
+import ee.kivikakk.ili9341spi.spi.SPIRequest
 
 class ILIIO extends Bundle {
   val clk  = Output(Bool())
@@ -33,24 +34,15 @@ class Top(implicit platform: Platform) extends Module {
   ili.dc        := spi.pins.dc
   spi.pins.cipo := ili.cipo // FF sync?
 
-  spi.io.req.bits.data    := 0.U
-  spi.io.req.bits.dc      := false.B
-  spi.io.req.bits.respLen := 0.U
-  spi.io.req.valid        := false.B
-  spi.io.resp.ready       := false.B
+  spi.io.req.noenq()
+  spi.io.resp.nodeq()
 
-  val uart = Module(new UART)
-  uart.io.rx.ready := false.B
+  val uart = Module(new UART(baud = 115200))
+  uart.io.rx.nodeq()
   uart.io.tx :<>= spi.io.resp
 
-  val fire = RegInit(0.U(8.W))
-  uart.io.rx.ready := fire === 0.U
-  when(uart.io.rx.fire && ~uart.io.rx.bits.err) {
-    fire := uart.io.rx.bits.byte
-  }
-
   object State extends ChiselEnum {
-    val sResetApply, sResetWait, sInit, sInitParam, sIdle = Value
+    val sResetApply, sResetWait, sInitCmd, sInitParam, sWriteImg, sIdle = Value
   }
   val state         = RegInit(State.sResetApply)
   val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
@@ -61,9 +53,12 @@ class Top(implicit platform: Platform) extends Module {
   val initCmdRemReg = Reg(
     UInt(unsignedBitLength(LCDInit.sequence.map(_._2.length).max).W),
   )
+  val pngRomLen    = LCDInit.pngrom.length
+  val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
   // Cbf putting every initted memory on SPI flash.
-  val rom = VecInit(LCDInit.rom)
+  val initRom = VecInit(LCDInit.rom)
+  val pngRom  = VecInit(LCDInit.pngrom)
 
   switch(state) {
     is(State.sResetApply) {
@@ -77,71 +72,66 @@ class Top(implicit platform: Platform) extends Module {
     is(State.sResetWait) {
       resTimerReg := resTimerReg - 1.U
       when(resTimerReg === 0.U) {
-        state := State.sInit
+        state := State.sInitCmd
       }
     }
-    is(State.sInit) {
-      when(uart.io.tx.ready) {
-        when(initRomIxReg =/= initRomLen.U) {
-          initRomIxReg         := initRomIxReg + 2.U
-          initCmdRemReg        := rom(initRomIxReg + 1.U)
-          spi.io.req.bits.data := rom(initRomIxReg)
-          spi.io.req.bits.dc   := true.B
-          spi.io.req.valid     := true.B
-          uart.io.tx.bits      := rom(initRomIxReg)
-          uart.io.tx.valid     := true.B
-          state                := State.sInitParam
+    is(State.sInitCmd) {
+      when(initRomIxReg =/= initRomLen.U) {
+        val req = Wire(new SPIRequest())
+        req.data    := initRom(initRomIxReg)
+        req.dc      := true.B
+        req.respLen := 0.U
+        spi.io.req.enq(req)
 
-          when(rom(initRomIxReg) === 0.U) {
+        when(spi.io.req.fire) {
+          initRomIxReg  := initRomIxReg + 2.U
+          initCmdRemReg := initRom(initRomIxReg + 1.U)
+
+          state := State.sInitParam
+
+          when(initRom(initRomIxReg) === 0.U) {
             resTimerReg := resetWaitCyc.U
             state       := State.sResetWait
           }
-        }.otherwise {
-          state := State.sIdle
         }
+      }.otherwise {
+        state        := State.sWriteImg
+        pngRomOffReg := 0.U
       }
     }
     is(State.sInitParam) {
-      when(spi.io.req.ready & uart.io.tx.ready) {
-        when(initCmdRemReg =/= 0.U) {
-          initRomIxReg         := initRomIxReg + 1.U
-          initCmdRemReg        := initCmdRemReg - 1.U
-          spi.io.req.bits.data := rom(initRomIxReg)
-          spi.io.req.valid     := true.B
-          uart.io.tx.bits      := rom(initRomIxReg)
-          uart.io.tx.valid     := true.B
-        }.otherwise {
-          uart.io.tx.bits  := 0xff.U
-          uart.io.tx.valid := true.B
-          state            := State.sInit
+      when(initCmdRemReg =/= 0.U) {
+        val req = Wire(new SPIRequest)
+        req.data    := initRom(initRomIxReg)
+        req.dc      := false.B
+        req.respLen := 0.U
+        spi.io.req.enq(req)
+
+        when(spi.io.req.fire) {
+          initRomIxReg  := initRomIxReg + 1.U
+          initCmdRemReg := initCmdRemReg - 1.U
         }
+      }.otherwise {
+        uart.io.tx.enq(0xff.U)
+        state := State.sInitCmd
       }
     }
-    is(State.sIdle) {
-      when(fire === 0xfe.U) {
-        resReg           := true.B
-        uart.io.tx.bits  := 0x01.U
-        uart.io.tx.valid := true.B
-        fire             := 0.U
-      }
-      when(fire === 0xfd.U) {
-        resReg           := false.B
-        uart.io.tx.bits  := 0x00.U
-        uart.io.tx.valid := true.B
-        fire             := 0.U
-      }
-      when(fire =/= 0.U && fire < 0xfd.U && spi.io.req.ready) {
-        spi.io.req.bits.data    := fire
-        spi.io.req.bits.dc      := true.B
-        spi.io.req.bits.respLen := 2.U
-        spi.io.req.valid        := true.B
+    is(State.sWriteImg) {
+      when(pngRomOffReg =/= pngRomLen.U) {
+        val req = Wire(new SPIRequest)
+        req.data    := pngRom(pngRomOffReg)
+        req.dc      := false.B
+        req.respLen := 0.U
+        spi.io.req.enq(req)
 
-        uart.io.tx.bits  := fire
-        uart.io.tx.valid := true.B
-
-        fire := 0.U
+        when(spi.io.req.fire) {
+          pngRomOffReg := pngRomOffReg + 1.U
+        }
+      }.otherwise {
+        state := State.sIdle
       }
     }
+    is(State.sIdle) {}
   }
 
   platform match {

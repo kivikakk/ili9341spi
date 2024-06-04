@@ -3,6 +3,9 @@ package ee.kivikakk.ili9341spi.spi
 import chisel3._
 import ee.kivikakk.ili9341spi.spi.LCDCommand._
 
+import java.awt.Color
+import java.io.File
+import javax.imageio.ImageIO
 import scala.collection.mutable
 
 object LCDInit {
@@ -33,9 +36,12 @@ object LCDInit {
       Seq(0x00.U, 0x0e.U, 0x14.U, 0x03.U, 0x11.U, 0x07.U, 0x31.U, 0xc1.U,
         0x48.U, 0x08.U, 0x0f.U, 0x0c.U, 0x31.U, 0x36.U, 0x0f.U),
     ),
+    (CASET, Seq(0x00.U, 0x00.U, 0x00.U, 0x00.U)),
+    (PASET, Seq(0x00.U, 0x00.U, 0x00.U, 0x00.U)),
     (SLEEP_OUT, Seq()),
     (NOP, Seq()), // stand-in that means "wait 120ms"
     (DISPLAY_ON, Seq()),
+    (WRITE_MEMORY_CONTINUE, Seq()),
   )
 
   val rom: Seq[UInt] = {
@@ -46,5 +52,26 @@ object LCDInit {
       rom ++= params
     }
     rom.toSeq
+  }
+
+  val pngrom: Seq[UInt] = {
+    val png    = ImageIO.read(new File("jjr.png"))
+    val nyonks = mutable.ArrayBuffer[UInt]()
+    for {
+      y <- 0 until 10
+      x <- 0 until 320
+    } {
+      val rgb = new Color(png.getRGB(x, y))
+      // 565
+      nyonks.append(
+        ((rgb.getRed() & 0xf8) |
+          (rgb.getGreen() >> 5)).U(8.W),
+      )
+      nyonks.append(
+        (((rgb.getGreen() & 0x1c) << 3) |
+          (rgb.getBlue() >> 3)).U(8.W),
+      )
+    }
+    nyonks.toSeq
   }
 }

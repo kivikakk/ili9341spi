@@ -35,9 +35,8 @@ class SPI extends Module {
   srNext    := srReg(6, 0) ## pins.cipo
   pins.copi := srReg(7)
 
-  io.req.ready  := false.B
-  io.resp.bits  := 0.U
-  io.resp.valid := false.B
+  io.req.nodeq()
+  io.resp.noenq()
 
   object State extends ChiselEnum {
     val sIdle, sSndLow, sSndHigh, sRcvLow, sRcvHigh, sRcvDone = Value
@@ -45,16 +44,16 @@ class SPI extends Module {
   val state = RegInit(State.sIdle)
 
   val bitRemReg     = Reg(UInt(3.W))
-  val sndByteRemReg = Reg(UInt(4.W))
+  val rcvByteRemReg = Reg(UInt(4.W))
 
   switch(state) {
     is(State.sIdle) {
-      io.req.ready := true.B
-      when(io.req.valid) {
-        srReg         := io.req.bits.data
-        dcReg         := io.req.bits.dc
+      val req = io.req.deq()
+      when(io.req.fire) {
+        srReg         := req.data
+        dcReg         := req.dc
         bitRemReg     := 7.U
-        sndByteRemReg := io.req.bits.respLen
+        rcvByteRemReg := req.respLen
         state         := State.sSndLow
       }
     }
@@ -68,9 +67,9 @@ class SPI extends Module {
 
       when(bitRemReg === 0.U) {
         bitRemReg     := 7.U
-        sndByteRemReg := sndByteRemReg - 1.U
+        rcvByteRemReg := rcvByteRemReg - 1.U
         dcReg         := false.B
-        state         := Mux(sndByteRemReg =/= 0.U, State.sRcvLow, State.sIdle)
+        state         := Mux(rcvByteRemReg =/= 0.U, State.sRcvLow, State.sIdle)
       }
     }
     is(State.sRcvLow) {
@@ -87,11 +86,10 @@ class SPI extends Module {
       }
     }
     is(State.sRcvDone) {
-      io.resp.bits  := srReg
-      io.resp.valid := true.B
-      sndByteRemReg := sndByteRemReg - 1.U
+      io.resp.enq(srReg)
+      rcvByteRemReg := rcvByteRemReg - 1.U
 
-      when(sndByteRemReg === 0.U) {
+      when(rcvByteRemReg === 0.U) {
         state := State.sIdle
       }.otherwise {
         state := State.sRcvHigh
