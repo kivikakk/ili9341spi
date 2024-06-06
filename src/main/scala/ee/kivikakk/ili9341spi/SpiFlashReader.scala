@@ -6,7 +6,7 @@ import ee.hrzn.chryse.platform.Platform
 
 class SpiFlashReaderRequest extends Bundle {
   val addr = Output(UInt(24.W))
-  val len  = Output(UInt(16.W))
+  val len  = Output(UInt(32.W))
 }
 
 class SpiFlashReaderIO extends Bundle {
@@ -35,7 +35,7 @@ class SpiFlashReader(implicit platform: Platform) extends Module {
     0.U(unsignedBitLength(Seq(32, TRES1_TDP_CYCLES).max - 1).W),
   )
   val rcvBitRemReg  = RegInit(0.U(unsignedBitLength(7).W))
-  val rcvByteRemReg = RegInit(0.U(16.W))
+  val rcvByteRemReg = RegInit(0.U(32.W))
 
   val csReg = RegInit(false.B)
   pins.cs := csReg

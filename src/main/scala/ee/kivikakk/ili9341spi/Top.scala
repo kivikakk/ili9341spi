@@ -24,10 +24,7 @@ class IliIO extends Bundle {
 class Top(implicit platform: Platform) extends Module {
   override def desiredName = "ili9341spi"
 
-  val spiClock = RegInit(false.B)
-  spiClock := ~spiClock
-
-  val spifr = withClock(spiClock.asClock)(Module(new SpiFlashReader))
+  val spifr = Module(new SpiFlashReader)
   spifr.io.req.noenq()
   spifr.io.resp.nodeq()
 
@@ -50,7 +47,8 @@ class Top(implicit platform: Platform) extends Module {
   uart.io.tx :<>= lcd.io.resp
 
   object State extends ChiselEnum {
-    val sResetApply, sResetWait, sInitCmd, sInitParam, sWriteImg, sIdle = Value
+    val sResetApply, sResetWait, sInitCmd, sInitParam, sInitImg, sWriteImg,
+        sIdle = Value
   }
   val state         = RegInit(State.sResetApply)
   val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
@@ -61,7 +59,8 @@ class Top(implicit platform: Platform) extends Module {
   val initCmdRemReg = Reg(
     UInt(unsignedBitLength(LcdInit.sequence.map(_._2.length).max).W),
   )
-  val pngRomLen    = LcdInit.pngrom.length
+  val pngRomLen = LcdInit.pngrom.length
+  println(s"pngRomLen: $pngRomLen")
   val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
   // Cbf putting every tiny initted memory on SPI flash.
@@ -102,13 +101,8 @@ class Top(implicit platform: Platform) extends Module {
           }
         }
       }.otherwise {
-        state        := State.sWriteImg
+        state        := State.sInitImg
         pngRomOffReg := 0.U
-
-        val req = Wire(new SpiFlashReaderRequest)
-        req.addr := platform.asInstanceOf[PlatformFlashable].romFlashBase.U
-        req.len  := pngRomLen.U
-        spifr.io.req.enq(req)
       }
     }
     is(State.sInitParam) {
@@ -128,7 +122,26 @@ class Top(implicit platform: Platform) extends Module {
         state := State.sInitCmd
       }
     }
+    is(State.sInitImg) {
+      val req = Wire(new SpiFlashReaderRequest)
+      req.addr := platform.asInstanceOf[PlatformFlashable].romFlashBase.U
+      req.len  := pngRomLen.U
+      spifr.io.req.enq(req)
+
+      state := State.sWriteImg
+    }
     is(State.sWriteImg) {
+      val ehlo = uart.io.rx.deq()
+      when(uart.io.rx.fire && ehlo.byte === 1.U) {
+        uart.io.tx.enq(pngRomOffReg(7, 0))
+      }.elsewhen(uart.io.rx.fire && ehlo.byte === 2.U) {
+        uart.io.tx.enq(pngRomOffReg(15, 8))
+      }.elsewhen(uart.io.rx.fire && ehlo.byte === 3.U) {
+        uart.io.tx.enq(pngRomOffReg(17, 16))
+      }.elsewhen(uart.io.rx.fire && ehlo.byte === 4.U) {
+        uart.io.tx.enq(state.asUInt)
+      }
+
       when(pngRomOffReg =/= pngRomLen.U) {
         val resp = spifr.io.resp.deq()
         when(spifr.io.resp.fire) {
