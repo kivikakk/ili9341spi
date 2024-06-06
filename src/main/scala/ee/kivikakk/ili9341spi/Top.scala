@@ -2,7 +2,6 @@ package ee.kivikakk.ili9341spi
 
 import chisel3._
 import chisel3.util._
-import ee.hrzn.athena.flashable.PlatformFlashable
 import ee.hrzn.athena.uart.Uart
 import ee.hrzn.chryse.platform.Platform
 import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
@@ -28,16 +27,6 @@ class Top(implicit platform: Platform) extends Module {
   spifr.io.req.noenq()
   spifr.io.resp.nodeq()
 
-  // val spramSize = 320 * 200
-  val spramSize = 320 * 200
-  val spram     = SRAM.masked(spramSize, Vec(2, UInt(8.W)), 1, 1, 0)
-  spram.readPorts(0).address   := DontCare
-  spram.readPorts(0).enable    := false.B
-  spram.writePorts(0).address  := DontCare
-  spram.writePorts(0).enable   := false.B
-  spram.writePorts(0).mask.get := VecInit(false.B, false.B)
-  spram.writePorts(0).data     := DontCare
-
   val ili    = Wire(new IliIO)
   val resReg = RegInit(true.B) // start with reset on.
   ili.res := resReg
@@ -57,10 +46,9 @@ class Top(implicit platform: Platform) extends Module {
   uart.io.tx :<>= lcd.io.resp
 
   object State extends ChiselEnum {
-    val sSpifrInit, sSpifrRead, sResetApply, sResetWait, sInitCmd, sInitParam,
-        sWriteImg, sWriteImgGo1, sWriteImgGo, sIdle = Value
+    val sResetApply, sResetWait, sInitCmd, sInitParam, sWriteImg = Value
   }
-  val state         = RegInit(State.sSpifrInit)
+  val state         = RegInit(State.sResetApply)
   val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
   val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
   val resTimerReg   = RegInit(resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W))
@@ -69,43 +57,13 @@ class Top(implicit platform: Platform) extends Module {
   val initCmdRemReg = Reg(
     UInt(unsignedBitLength(LcdInit.sequence.map(_._2.length).max).W),
   )
-  val pngRomLen = Seq(LcdInit.pngrom.length, spramSize).max
-  println(s"pngRomLen: $pngRomLen")
+  val pngRomLen    = LcdInit.pngrom.length
   val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
   // Cbf putting every tiny initted memory on SPI flash.
   val initRom = VecInit(LcdInit.rom)
 
   switch(state) {
-    is(State.sSpifrInit) {
-      val req = Wire(new SpiFlashReaderRequest)
-      req.addr := platform.asInstanceOf[PlatformFlashable].romFlashBase.U
-      req.len  := pngRomLen.U
-      spifr.io.req.enq(req)
-
-      pngRomOffReg := 0.U
-      state        := State.sSpifrRead
-    }
-    is(State.sSpifrRead) {
-      when(pngRomOffReg =/= pngRomLen.U) {
-        val resp = spifr.io.resp.deq()
-        when(spifr.io.resp.fire) {
-          spram.writePorts(0).address := pngRomOffReg >> 1
-          spram.writePorts(0).data := Mux(
-            ~pngRomOffReg(0),
-            VecInit(resp, DontCare),
-            VecInit(DontCare, resp),
-          )
-          spram.writePorts(0).mask.get(pngRomOffReg(0)) := true.B
-          spram.writePorts(0).enable                    := true.B
-
-          pngRomOffReg := pngRomOffReg + 1.U
-        }
-      }.otherwise {
-        state := State.sResetApply
-      }
-    }
-
     is(State.sResetApply) {
       resTimerReg := resTimerReg - 1.U
       when(resTimerReg === 0.U) {
@@ -163,24 +121,17 @@ class Top(implicit platform: Platform) extends Module {
     }
 
     is(State.sWriteImg) {
-      when(pngRomOffReg =/= pngRomLen.U) {
-        spram.readPorts(0).address := pngRomOffReg >> 1
-        spram.readPorts(0).enable  := true.B
-        state                      := State.sWriteImgGo
-      }.otherwise(state := State.sIdle)
-    }
-    is(State.sWriteImgGo) {
-      val req = Wire(new LcdRequest)
-      req.data    := spram.readPorts(0).data(pngRomOffReg(0))
-      req.dc      := false.B
-      req.respLen := 0.U
-      lcd.io.req.enq(req)
+      val data = uart.io.rx.deq()
+      when(uart.io.rx.fire) {
+        val req = Wire(new LcdRequest)
+        req.data    := data.byte
+        req.dc      := false.B
+        req.respLen := 0.U
+        lcd.io.req.enq(req)
 
-      pngRomOffReg := pngRomOffReg + 1.U
-
-      state := State.sWriteImg
+        pngRomOffReg := pngRomOffReg + 1.U
+      }
     }
-    is(State.sIdle) {}
   }
 
   platform match {
@@ -195,6 +146,8 @@ class Top(implicit platform: Platform) extends Module {
       plat.resources.uart.tx := uart.pins.tx
       uart.pins.rx           := plat.resources.uart.rx
 
+      plat.resources.pmod2(1).o := plat.resources.uart.rx
+
       plat.resources.spiFlash.cs    := spifr.pins.cs
       plat.resources.spiFlash.clock := spifr.pins.clock
       plat.resources.spiFlash.copi  := spifr.pins.copi
@@ -202,7 +155,7 @@ class Top(implicit platform: Platform) extends Module {
       plat.resources.spiFlash.wp    := false.B
       plat.resources.spiFlash.hold  := false.B
 
-      plat.resources.ledg := state === State.sIdle
+      plat.resources.ledg := state === State.sWriteImg
 
     case plat: Ulx3SPlatform =>
       ili.cipo := false.B
