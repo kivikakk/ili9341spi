@@ -9,7 +9,7 @@ import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
 import ee.hrzn.chryse.platform.ecp5.Lfe5U_45F
 import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
-import ee.kivikakk.ili9341spi.lcd.LCDInit
+import ee.kivikakk.ili9341spi.lcd.LcdInit
 
 object App extends ChryseApp {
   override val name                                  = "ili9341spi"
@@ -44,6 +44,6 @@ object App extends ChryseApp {
   )
 
   object rom extends SubcommandRom(this) {
-    override def romContent = LCDInit.pngrom
+    override def romContent = LcdInit.pngrom
   }
 }

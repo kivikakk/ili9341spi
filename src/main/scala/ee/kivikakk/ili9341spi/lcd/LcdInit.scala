@@ -7,10 +7,10 @@ import java.io.File
 import javax.imageio.ImageIO
 import scala.collection.mutable
 
-import LCDCommand._
+import LcdCommand._
 
-object LCDInit {
-  val sequence: Seq[(LCDCommand.Type, Seq[UInt])] = Seq(
+object LcdInit {
+  val sequence: Seq[(LcdCommand.Type, Seq[UInt])] = Seq(
     (POWER_CTRL_A, Seq(0x39.U, 0x2c.U, 0x00.U, 0x34.U, 0x02.U)),
     (POWER_CTRL_B, Seq(0x00.U, 0xc1.U, 0x30.U)),
     (DRIVER_TIMING_CTRL_A, Seq(0x85.U, 0x00.U, 0x78.U)),

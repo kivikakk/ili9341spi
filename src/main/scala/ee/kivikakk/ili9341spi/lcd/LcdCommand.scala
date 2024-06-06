@@ -2,7 +2,7 @@ package ee.kivikakk.ili9341spi.lcd
 
 import chisel3._
 
-object LCDCommand extends ChiselEnum {
+object LcdCommand extends ChiselEnum {
   val NOP                   = Value(0x00.U)
   val SOFTWARE_RESET        = Value(0x01.U)
   val READ_DISPLAY_ID       = Value(0x04.U)

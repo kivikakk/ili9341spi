@@ -8,9 +8,9 @@ import ee.hrzn.chryse.platform.Platform
 import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
 import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
-import ee.kivikakk.ili9341spi.lcd.LCDInit
-import ee.kivikakk.ili9341spi.lcd.LcdRequest
 import ee.kivikakk.ili9341spi.lcd.Lcd
+import ee.kivikakk.ili9341spi.lcd.LcdInit
+import ee.kivikakk.ili9341spi.lcd.LcdRequest
 
 class IliIO extends Bundle {
   val clk  = Output(Bool())
@@ -56,16 +56,16 @@ class Top(implicit platform: Platform) extends Module {
   val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
   val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
   val resTimerReg   = RegInit(resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W))
-  val initRomLen    = LCDInit.rom.length
+  val initRomLen    = LcdInit.rom.length
   val initRomIxReg  = RegInit(0.U(unsignedBitLength(initRomLen).W))
   val initCmdRemReg = Reg(
-    UInt(unsignedBitLength(LCDInit.sequence.map(_._2.length).max).W),
+    UInt(unsignedBitLength(LcdInit.sequence.map(_._2.length).max).W),
   )
-  val pngRomLen    = LCDInit.pngrom.length
+  val pngRomLen    = LcdInit.pngrom.length
   val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
   // Cbf putting every tiny initted memory on SPI flash.
-  val initRom = VecInit(LCDInit.rom)
+  val initRom = VecInit(LcdInit.rom)
 
   switch(state) {
     is(State.sResetApply) {
