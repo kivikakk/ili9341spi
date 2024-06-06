@@ -166,6 +166,8 @@ class Top(implicit platform: Platform) extends Module {
       plat.resources.spiFlash.wp    := false.B
       plat.resources.spiFlash.hold  := false.B
 
+      plat.resources.ledg := state === State.sIdle
+
     case plat: Ulx3SPlatform =>
       ili.cipo := false.B
 
