@@ -29,7 +29,7 @@ class Top(implicit platform: Platform) extends Module {
   spifr.io.resp.nodeq()
 
   // val spramSize = 320 * 200
-  val spramSize = 320 * 100
+  val spramSize = 320 * 200
   val spram     = SRAM.masked(spramSize, Vec(2, UInt(8.W)), 1, 1, 0)
   spram.readPorts(0).address   := DontCare
   spram.readPorts(0).enable    := false.B
@@ -58,9 +58,9 @@ class Top(implicit platform: Platform) extends Module {
 
   object State extends ChiselEnum {
     val sSpifrInit, sSpifrRead, sResetApply, sResetWait, sInitCmd, sInitParam,
-        sWriteImg, sWriteImgGo, sIdle = Value
+        sWriteImg, sWriteImgGo1, sWriteImgGo, sIdle = Value
   }
-  val state         = RegInit(State.sResetApply)
+  val state         = RegInit(State.sSpifrInit)
   val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
   val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
   val resTimerReg   = RegInit(resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W))
@@ -69,7 +69,7 @@ class Top(implicit platform: Platform) extends Module {
   val initCmdRemReg = Reg(
     UInt(unsignedBitLength(LcdInit.sequence.map(_._2.length).max).W),
   )
-  val pngRomLen = LcdInit.pngrom.length
+  val pngRomLen = Seq(LcdInit.pngrom.length, spramSize).max
   println(s"pngRomLen: $pngRomLen")
   val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
