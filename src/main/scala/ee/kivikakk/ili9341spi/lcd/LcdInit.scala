@@ -21,7 +21,7 @@ object LCDInit {
     (POWER_CTRL_2, Seq(0x10.U)),
     (VCOM_CTRL_1, Seq(0x3e.U, 0x28.U)),
     (VCOM_CTRL_2, Seq(0x86.U)),
-    (MEMORY_ACCESS_CTRL, Seq(0x48.U)),
+    (MEMORY_ACCESS_CTRL, Seq(0x28.U)),
     (COLMOD, Seq(0x55.U)),
     (FRAME_RATE_CTRL, Seq(0x00.U, 0x18.U)),
     (DISPLAY_FN_CTRL, Seq(0x08.U, 0x82.U, 0x27.U)),
@@ -37,12 +37,12 @@ object LCDInit {
       Seq(0x00.U, 0x0e.U, 0x14.U, 0x03.U, 0x11.U, 0x07.U, 0x31.U, 0xc1.U,
         0x48.U, 0x08.U, 0x0f.U, 0x0c.U, 0x31.U, 0x36.U, 0x0f.U),
     ),
-    (CASET, Seq(0x00.U, 0x00.U, 0x00.U, 0x00.U)),
-    (PASET, Seq(0x00.U, 0x00.U, 0x00.U, 0x00.U)),
+    (CASET, Seq(0x00.U, 0x00.U, 0x01.U, 0x30.U)),
+    (PASET, Seq(0x00.U, 0x00.U, 0x00.U, 0xef.U)),
     (SLEEP_OUT, Seq()),
     (NOP, Seq()), // stand-in that means "wait 120ms"
     (DISPLAY_ON, Seq()),
-    (WRITE_MEMORY_CONTINUE, Seq()),
+    (MEMORY_WRITE, Seq()),
   )
 
   lazy val rom: Seq[UInt] = {

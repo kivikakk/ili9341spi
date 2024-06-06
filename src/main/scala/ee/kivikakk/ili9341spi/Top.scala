@@ -2,16 +2,17 @@ package ee.kivikakk.ili9341spi
 
 import chisel3._
 import chisel3.util._
-import ee.hrzn.athena.uart.UART
+import ee.hrzn.athena.flashable.PlatformFlashable
+import ee.hrzn.athena.uart.Uart
 import ee.hrzn.chryse.platform.Platform
-import ee.hrzn.chryse.platform.cxxrtl.CXXRTLPlatform
-import ee.hrzn.chryse.platform.ecp5.ULX3SPlatform
+import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
+import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
-import ee.kivikakk.ili9341spi.lcd.LCD
 import ee.kivikakk.ili9341spi.lcd.LCDInit
-import ee.kivikakk.ili9341spi.lcd.LCDRequest
+import ee.kivikakk.ili9341spi.lcd.LcdRequest
+import ee.kivikakk.ili9341spi.lcd.Lcd
 
-class ILIIO extends Bundle {
+class IliIO extends Bundle {
   val clk  = Output(Bool())
   val copi = Output(Bool())
   val res  = Output(Bool())
@@ -23,16 +24,19 @@ class ILIIO extends Bundle {
 class Top(implicit platform: Platform) extends Module {
   override def desiredName = "ili9341spi"
 
-  val spifr = Module(new SPIFlashReader)
+  val spiClock = RegInit(false.B)
+  spiClock := ~spiClock
+
+  val spifr = withClock(spiClock.asClock)(Module(new SpiFlashReader))
   spifr.io.req.noenq()
   spifr.io.resp.nodeq()
 
-  val ili    = Wire(new ILIIO)
+  val ili    = Wire(new IliIO)
   val resReg = RegInit(true.B) // start with reset on.
   ili.res := resReg
   ili.blk := true.B
 
-  val lcd = Module(new LCD)
+  val lcd = Module(new Lcd)
   ili.clk       := lcd.pins.clk
   ili.copi      := lcd.pins.copi
   ili.dc        := lcd.pins.dc
@@ -41,7 +45,7 @@ class Top(implicit platform: Platform) extends Module {
   lcd.io.req.noenq()
   lcd.io.resp.nodeq()
 
-  val uart = Module(new UART(baud = 115200))
+  val uart = Module(new Uart(baud = 115200))
   uart.io.rx.nodeq()
   uart.io.tx :<>= lcd.io.resp
 
@@ -80,7 +84,7 @@ class Top(implicit platform: Platform) extends Module {
     }
     is(State.sInitCmd) {
       when(initRomIxReg =/= initRomLen.U) {
-        val req = Wire(new LCDRequest())
+        val req = Wire(new LcdRequest())
         req.data    := initRom(initRomIxReg)
         req.dc      := true.B
         req.respLen := 0.U
@@ -100,11 +104,16 @@ class Top(implicit platform: Platform) extends Module {
       }.otherwise {
         state        := State.sWriteImg
         pngRomOffReg := 0.U
+
+        val req = Wire(new SpiFlashReaderRequest)
+        req.addr := platform.asInstanceOf[PlatformFlashable].romFlashBase.U
+        req.len  := pngRomLen.U
+        spifr.io.req.enq(req)
       }
     }
     is(State.sInitParam) {
       when(initCmdRemReg =/= 0.U) {
-        val req = Wire(new LCDRequest)
+        val req = Wire(new LcdRequest)
         req.data    := initRom(initRomIxReg)
         req.dc      := false.B
         req.respLen := 0.U
@@ -121,14 +130,14 @@ class Top(implicit platform: Platform) extends Module {
     }
     is(State.sWriteImg) {
       when(pngRomOffReg =/= pngRomLen.U) {
-        val req = Wire(new LCDRequest)
-        req.data := 0xff.U
-        // req.data    := pngRom(pngRomOffReg)
-        req.dc      := false.B
-        req.respLen := 0.U
-        lcd.io.req.enq(req)
+        val resp = spifr.io.resp.deq()
+        when(spifr.io.resp.fire) {
+          val req = Wire(new LcdRequest)
+          req.data    := resp
+          req.dc      := false.B
+          req.respLen := 0.U
+          lcd.io.req.enq(req)
 
-        when(lcd.io.req.fire) {
           pngRomOffReg := pngRomOffReg + 1.U
         }
       }.otherwise {
@@ -157,7 +166,7 @@ class Top(implicit platform: Platform) extends Module {
       plat.resources.spiFlash.wp    := false.B
       plat.resources.spiFlash.hold  := false.B
 
-    case plat: ULX3SPlatform =>
+    case plat: Ulx3SPlatform =>
       ili.cipo := false.B
 
       plat.resources.uart.tx := uart.pins.tx
@@ -170,8 +179,8 @@ class Top(implicit platform: Platform) extends Module {
       plat.resources.spiFlash.wp    := false.B
       plat.resources.spiFlash.hold  := false.B
 
-    case plat: CXXRTLPlatform =>
-      val io = IO(new ILIIO)
+    case plat: CxxrtlPlatform =>
+      val io = IO(new IliIO)
       io :<>= ili
 
       uart.pins.rx := false.B

@@ -1,4 +1,4 @@
-ThisBuild / scalaVersion         := "2.13.12"
+ThisBuild / scalaVersion         := "2.13.14"
 ThisBuild / version              := "0.1.0-SNAPSHOT"
 ThisBuild / versionScheme        := Some("early-semver")
 ThisBuild / homepage             := Some(url("https://github.com/kivikakk/ili9341spi"))

@@ -4,12 +4,12 @@ import chisel3._
 import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 
-class LCDSpec extends AnyFlatSpec {
-  behavior.of("LCD")
+class LcdSpec extends AnyFlatSpec {
+  behavior.of("Lcd")
 
   private val rand = new scala.util.Random
 
-  def snd(c: LCD, bytes: Seq[Byte], rcvCnt: Int = 0): Unit = {
+  def snd(c: Lcd, bytes: Seq[Byte], rcvCnt: Int = 0): Unit = {
     for { (byte, byteIx) <- bytes.zipWithIndex } {
       c.clock.step()
       c.pins.clk.expect(false.B, s"snd pins.clk @ $byteIx")
@@ -45,7 +45,7 @@ class LCDSpec extends AnyFlatSpec {
     c.io.req.ready.expect((rcvCnt == 0).B)
   }
 
-  def rcv(c: LCD, bytes: Seq[Byte]): Unit = {
+  def rcv(c: Lcd, bytes: Seq[Byte]): Unit = {
     for { (byte, byteIx) <- bytes.zipWithIndex } {
       for { bitIx <- 0 until 8 } {
         c.pins.clk.expect(false.B, s"rcv pins.clk @ $byteIx:$bitIx")
@@ -69,26 +69,26 @@ class LCDSpec extends AnyFlatSpec {
   }
 
   it should "transmit a 1-byte command packet" in {
-    simulate(new LCD) { c =>
+    simulate(new Lcd) { c =>
       snd(c, rand.nextBytes(1).toSeq)
     }
   }
 
   it should "transmit a 2-byte command packet" in {
-    simulate(new LCD) { c =>
+    simulate(new Lcd) { c =>
       snd(c, rand.nextBytes(2).toSeq)
     }
   }
 
   it should "read a 1-byte response to a command packet" in {
-    simulate(new LCD) { c =>
+    simulate(new Lcd) { c =>
       snd(c, rand.nextBytes(1).toSeq, 1)
       rcv(c, rand.nextBytes(1).toSeq)
     }
   }
 
   it should "read a 2-byte response to a command packet" in {
-    simulate(new LCD) { c =>
+    simulate(new Lcd) { c =>
       // TODO: optional cycle delay between send/receive. The datasheet is
       // ambiguous as to whether or not it should be just one cycle, or an
       // entire byte.

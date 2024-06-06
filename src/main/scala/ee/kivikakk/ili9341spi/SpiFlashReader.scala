@@ -4,24 +4,26 @@ import chisel3._
 import chisel3.util._
 import ee.hrzn.chryse.platform.Platform
 
-class SPIFlashReaderIO extends Bundle {
-  val req = Flipped(Decoupled(new Bundle {
-    val addr = Output(UInt(24.W))
-    val len  = Output(UInt(16.W))
-  }))
+class SpiFlashReaderRequest extends Bundle {
+  val addr = Output(UInt(24.W))
+  val len  = Output(UInt(16.W))
+}
+
+class SpiFlashReaderIO extends Bundle {
+  val req  = Flipped(Decoupled(new SpiFlashReaderRequest))
   val resp = Decoupled(UInt(8.W))
 }
 
-class SPIPinsIO extends Bundle {
+class SpiPinsIO extends Bundle {
   val copi  = Output(Bool())
   val cipo  = Input(Bool())
   val cs    = Output(Bool())
   val clock = Output(Bool())
 }
 
-class SPIFlashReader(implicit platform: Platform) extends Module {
-  val io   = IO(new SPIFlashReaderIO)
-  val pins = IO(new SPIPinsIO)
+class SpiFlashReader(implicit platform: Platform) extends Module {
+  val io   = IO(new SpiFlashReaderIO)
+  val pins = IO(new SpiPinsIO)
 
   // tRES1 (/CS High to Standby Mode without ID Read) and tDP (/CS High to
   // Power-down Mode) are both max 3us.
