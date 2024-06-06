@@ -28,6 +28,16 @@ class Top(implicit platform: Platform) extends Module {
   spifr.io.req.noenq()
   spifr.io.resp.nodeq()
 
+  // val spramSize = 320 * 200
+  val spramSize = 320 * 100
+  val spram     = SRAM.masked(spramSize, Vec(2, UInt(8.W)), 1, 1, 0)
+  spram.readPorts(0).address   := DontCare
+  spram.readPorts(0).enable    := false.B
+  spram.writePorts(0).address  := DontCare
+  spram.writePorts(0).enable   := false.B
+  spram.writePorts(0).mask.get := VecInit(false.B, false.B)
+  spram.writePorts(0).data     := DontCare
+
   val ili    = Wire(new IliIO)
   val resReg = RegInit(true.B) // start with reset on.
   ili.res := resReg
@@ -47,8 +57,8 @@ class Top(implicit platform: Platform) extends Module {
   uart.io.tx :<>= lcd.io.resp
 
   object State extends ChiselEnum {
-    val sResetApply, sResetWait, sInitCmd, sInitParam, sInitImg, sWriteImg,
-        sIdle = Value
+    val sSpifrInit, sSpifrRead, sResetApply, sResetWait, sInitCmd, sInitParam,
+        sWriteImg, sWriteImgGo, sIdle = Value
   }
   val state         = RegInit(State.sResetApply)
   val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
@@ -67,6 +77,35 @@ class Top(implicit platform: Platform) extends Module {
   val initRom = VecInit(LcdInit.rom)
 
   switch(state) {
+    is(State.sSpifrInit) {
+      val req = Wire(new SpiFlashReaderRequest)
+      req.addr := platform.asInstanceOf[PlatformFlashable].romFlashBase.U
+      req.len  := pngRomLen.U
+      spifr.io.req.enq(req)
+
+      pngRomOffReg := 0.U
+      state        := State.sSpifrRead
+    }
+    is(State.sSpifrRead) {
+      when(pngRomOffReg =/= pngRomLen.U) {
+        val resp = spifr.io.resp.deq()
+        when(spifr.io.resp.fire) {
+          spram.writePorts(0).address := pngRomOffReg >> 1
+          spram.writePorts(0).data := Mux(
+            ~pngRomOffReg(0),
+            VecInit(resp, DontCare),
+            VecInit(DontCare, resp),
+          )
+          spram.writePorts(0).mask.get(pngRomOffReg(0)) := true.B
+          spram.writePorts(0).enable                    := true.B
+
+          pngRomOffReg := pngRomOffReg + 1.U
+        }
+      }.otherwise {
+        state := State.sResetApply
+      }
+    }
+
     is(State.sResetApply) {
       resTimerReg := resTimerReg - 1.U
       when(resTimerReg === 0.U) {
@@ -101,7 +140,7 @@ class Top(implicit platform: Platform) extends Module {
           }
         }
       }.otherwise {
-        state        := State.sInitImg
+        state        := State.sWriteImg
         pngRomOffReg := 0.U
       }
     }
@@ -122,40 +161,24 @@ class Top(implicit platform: Platform) extends Module {
         state := State.sInitCmd
       }
     }
-    is(State.sInitImg) {
-      val req = Wire(new SpiFlashReaderRequest)
-      req.addr := platform.asInstanceOf[PlatformFlashable].romFlashBase.U
-      req.len  := pngRomLen.U
-      spifr.io.req.enq(req)
+
+    is(State.sWriteImg) {
+      when(pngRomOffReg =/= pngRomLen.U) {
+        spram.readPorts(0).address := pngRomOffReg >> 1
+        spram.readPorts(0).enable  := true.B
+        state                      := State.sWriteImgGo
+      }.otherwise(state := State.sIdle)
+    }
+    is(State.sWriteImgGo) {
+      val req = Wire(new LcdRequest)
+      req.data    := spram.readPorts(0).data(pngRomOffReg(0))
+      req.dc      := false.B
+      req.respLen := 0.U
+      lcd.io.req.enq(req)
+
+      pngRomOffReg := pngRomOffReg + 1.U
 
       state := State.sWriteImg
-    }
-    is(State.sWriteImg) {
-      val ehlo = uart.io.rx.deq()
-      when(uart.io.rx.fire && ehlo.byte === 1.U) {
-        uart.io.tx.enq(pngRomOffReg(7, 0))
-      }.elsewhen(uart.io.rx.fire && ehlo.byte === 2.U) {
-        uart.io.tx.enq(pngRomOffReg(15, 8))
-      }.elsewhen(uart.io.rx.fire && ehlo.byte === 3.U) {
-        uart.io.tx.enq(pngRomOffReg(17, 16))
-      }.elsewhen(uart.io.rx.fire && ehlo.byte === 4.U) {
-        uart.io.tx.enq(state.asUInt)
-      }
-
-      when(pngRomOffReg =/= pngRomLen.U) {
-        val resp = spifr.io.resp.deq()
-        when(spifr.io.resp.fire) {
-          val req = Wire(new LcdRequest)
-          req.data    := resp
-          req.dc      := false.B
-          req.respLen := 0.U
-          lcd.io.req.enq(req)
-
-          pngRomOffReg := pngRomOffReg + 1.U
-        }
-      }.otherwise {
-        state := State.sIdle
-      }
     }
     is(State.sIdle) {}
   }
