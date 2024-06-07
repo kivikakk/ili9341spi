@@ -4,14 +4,16 @@ const Cxxrtl = @import("./Cxxrtl.zig");
 
 const SimThread = @This();
 
+thread_alloc: std.mem.Allocator,
 thread: std.Thread,
 vcd_out: ?[]const u8,
 mutex: std.Thread.Mutex = .{},
 running: bool = true,
 
-pub fn start(vcd_out: ?[]const u8) !*SimThread {
-    var sim_thread = try std.heap.c_allocator.create(SimThread);
+pub fn start(alloc: std.mem.Allocator, vcd_out: ?[]const u8) !*SimThread {
+    var sim_thread = try alloc.create(SimThread);
     sim_thread.* = .{
+        .thread_alloc = alloc,
         .thread = undefined,
         .vcd_out = vcd_out,
     };
@@ -43,7 +45,7 @@ pub fn halt(self: *SimThread) void {
 
 pub fn joinDeinit(self: *SimThread) void {
     self.thread.join();
-    std.heap.c_allocator.destroy(self);
+    self.thread_alloc.destroy(self);
 }
 
 fn run(sim_thread: *SimThread) void {
