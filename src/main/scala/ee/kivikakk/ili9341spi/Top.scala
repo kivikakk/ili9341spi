@@ -118,7 +118,7 @@ class Top(implicit platform: Platform) extends Module {
 
     is(State.sWriteImg) {
       val data = uart.io.rx.deq()
-      when(uart.io.rx.fire) {
+      when(uart.io.rx.fire && !uart.io.rx.bits.err) {
         val req = Wire(new LcdRequest)
         req.data    := data.byte
         req.dc      := false.B
@@ -153,10 +153,14 @@ class Top(implicit platform: Platform) extends Module {
       uart.pins.rx           := plat.resources.uart.rx
 
     case plat: CxxrtlPlatform =>
-      val io = IO(new IliIO)
-      io :<>= ili
+      val bb = IO(new IliIO)
+      bb :<>= ili
 
-      uart.pins.rx := false.B
+      // val bb = IO(Flipped(new IliIO))
+      // ili :<>= bb
+
+      val uart_rx = IO(Input(Bool()))
+      uart.pins.rx := uart_rx
 
     case _ =>
   }

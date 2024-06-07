@@ -37,7 +37,7 @@ object App extends ChryseApp {
       },
     )
   override val cxxrtlPlatforms = Seq(new CxxrtlZigPlatform("cxxrtl") {
-    val clockHz = 3_000_000
+    val clockHz = 500_000
   })
   override val additionalSubcommands = Seq(rom)
 

@@ -1,132 +1,90 @@
 const std = @import("std");
 
 const Cxxrtl = @import("./Cxxrtl.zig");
+const SimController = @import("./SimController.zig");
+const SpiConnector = @import("./SpiConnector.zig");
 
 const SimThread = @This();
 
-thread_alloc: std.mem.Allocator,
-thread: std.Thread,
-vcd_out: ?[]const u8,
-mutex: std.Thread.Mutex = .{},
-running: bool = true,
+sim_controller: *SimController,
+alloc: std.mem.Allocator,
 
-pub fn start(alloc: std.mem.Allocator, vcd_out: ?[]const u8) !*SimThread {
-    var sim_thread = try alloc.create(SimThread);
-    sim_thread.* = .{
-        .thread_alloc = alloc,
-        .thread = undefined,
-        .vcd_out = vcd_out,
+cxxrtl: Cxxrtl,
+vcd: ?Cxxrtl.Vcd,
+
+clock: Cxxrtl.Object(bool),
+reset: Cxxrtl.Object(bool),
+uart_rx: Cxxrtl.Object(bool),
+
+spi_connector: SpiConnector,
+
+pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread {
+    const cxxrtl = Cxxrtl.init();
+
+    var vcd: ?Cxxrtl.Vcd = null;
+    if (sim_controller.vcd_out != null) vcd = Cxxrtl.Vcd.init(cxxrtl);
+
+    const clock = cxxrtl.get(bool, "clock");
+    const reset = cxxrtl.get(bool, "reset");
+    const uart_rx = cxxrtl.get(bool, "uart_rx");
+
+    const spi_connector = SpiConnector.init(cxxrtl);
+
+    return .{
+        .sim_controller = sim_controller,
+        .alloc = alloc,
+        .cxxrtl = cxxrtl,
+        .vcd = vcd,
+        .clock = clock,
+        .reset = reset,
+        .uart_rx = uart_rx,
+        .spi_connector = spi_connector,
     };
-    const thread = try std.Thread.spawn(.{}, run, .{sim_thread});
-    sim_thread.thread = thread;
-    return sim_thread;
 }
 
-pub fn lockIfRunning(self: *SimThread) bool {
-    self.lock();
-    if (!self.running) {
-        self.unlock();
-        return false;
-    }
-    return true;
+pub fn deinit(self: *SimThread) void {
+    if (self.vcd) |*vcd| vcd.deinit();
+    self.cxxrtl.deinit();
 }
 
-fn lock(self: *SimThread) void {
-    self.mutex.lock();
-}
+pub fn run(self: *SimThread) !void {
+    self.uart_rx.next(true);
 
-pub fn unlock(self: *SimThread) void {
-    self.mutex.unlock();
-}
+    self.sim_controller.lock();
+    self.reset.next(true);
+    self.cycle();
+    self.reset.next(false);
+    self.sim_controller.unlock();
 
-pub fn halt(self: *SimThread) void {
-    self.running = false;
-}
-
-pub fn joinDeinit(self: *SimThread) void {
-    self.thread.join();
-    self.thread_alloc.destroy(self);
-}
-
-fn run(sim_thread: *SimThread) void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
-
-    var state = State.init(alloc, sim_thread);
-    defer state.deinit();
-
-    state.run() catch std.debug.panic("SimThread.State.run threw", .{});
-}
-
-const State = struct {
-    sim_thread: *SimThread,
-    alloc: std.mem.Allocator,
-
-    cxxrtl: Cxxrtl,
-    vcd: ?Cxxrtl.Vcd,
-
-    clock: Cxxrtl.Object(bool),
-    reset: Cxxrtl.Object(bool),
-
-    fn init(alloc: std.mem.Allocator, sim_thread: *SimThread) State {
-        const cxxrtl = Cxxrtl.init();
-
-        var vcd: ?Cxxrtl.Vcd = null;
-        if (sim_thread.vcd_out != null) vcd = Cxxrtl.Vcd.init(cxxrtl);
-
-        const clock = cxxrtl.get(bool, "clock");
-        const reset = cxxrtl.get(bool, "reset");
-
-        return .{
-            .sim_thread = sim_thread,
-            .alloc = alloc,
-            .cxxrtl = cxxrtl,
-            .vcd = vcd,
-            .clock = clock,
-            .reset = reset,
-        };
-    }
-
-    fn deinit(self: *State) void {
-        if (self.vcd) |*vcd| vcd.deinit();
-        self.cxxrtl.deinit();
-    }
-
-    fn run(self: *State) !void {
-        self.sim_thread.lock();
-        self.reset.next(true);
+    while (self.sim_controller.lockIfRunning()) {
+        defer self.sim_controller.unlock();
         self.cycle();
-        self.reset.next(false);
-        self.sim_thread.unlock();
-
-        while (self.sim_thread.lockIfRunning()) {
-            defer self.sim_thread.unlock();
-            self.cycle();
-        }
-
-        try self.writeVcd();
+        self.spi_connector.tick();
     }
 
-    fn cycle(self: *State) void {
-        self.clock.next(false);
-        self.cxxrtl.step();
-        if (self.vcd) |*vcd| vcd.sample();
+    try self.writeVcd();
+}
 
-        self.clock.next(true);
-        self.cxxrtl.step();
-        if (self.vcd) |*vcd| vcd.sample();
+fn cycle(self: *SimThread) void {
+    self.clock.next(false);
+    self.cxxrtl.step();
+    if (self.vcd) |*vcd| vcd.sample();
+
+    self.clock.next(true);
+    self.cxxrtl.step();
+    if (self.vcd) |*vcd| vcd.sample();
+
+    self.sim_controller.cycle_number += 1;
+}
+
+fn writeVcd(self: *SimThread) !void {
+    if (self.vcd) |*vcd| {
+        const buffer = try vcd.read(self.alloc);
+        defer self.alloc.free(buffer);
+
+        var file = try std.fs.cwd().createFile(self.sim_controller.vcd_out.?, .{});
+        defer file.close();
+
+        try file.writeAll(buffer);
     }
-
-    fn writeVcd(self: *State) !void {
-        if (self.vcd) |*vcd| {
-            const buffer = try vcd.read(self.alloc);
-            defer self.alloc.free(buffer);
-
-            var file = try std.fs.cwd().createFile(self.sim_thread.vcd_out.?, .{});
-            defer file.close();
-
-            try file.writeAll(buffer);
-        }
-    }
-};
+}

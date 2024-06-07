@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .@"SDL.zig" = .{
-            .url = "https://github.com/ikskuh/SDL.zig/archive/2c7b79f6f4836115177a94c9cae5e8ce840cdbb5.tar.gz",
-            .hash = "1220a3bb68d801d436b6a4bc96e3d1f293a16ae4e583a8d048817f01142f76649134",
+            .url = "https://github.com/kivikakk/SDL.zig/archive/9d18b804dbf0bafd5191c5309110c4f479a35998.tar.gz",
+            .hash = "1220b9707cae5f66bbf8979c128092e31fe5ff5e24369f536dcf4eb82eff6071488f",
         },
     },
     .paths = .{
