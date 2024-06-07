@@ -19,7 +19,7 @@ static void step() {
   vcd.sample(vcd_time++);
 }
 
-int main(int argc, char **argv) {
+int xyzmain(int argc, char **argv) {
   std::optional<std::string> vcd_out = std::nullopt;
 
   for (int i = 1; i < argc; ++i) {

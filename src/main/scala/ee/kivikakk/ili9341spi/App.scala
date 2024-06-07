@@ -5,7 +5,7 @@ import ee.hrzn.athena.flashable.SubcommandRom
 import ee.hrzn.chryse.ChryseApp
 import ee.hrzn.chryse.platform.Platform
 import ee.hrzn.chryse.platform.cxxrtl.CxxrtlOptions
-import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
+import ee.hrzn.chryse.platform.cxxrtl.CxxrtlZigPlatform
 import ee.hrzn.chryse.platform.ecp5.Lfe5U_45F
 import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
@@ -40,7 +40,9 @@ object App extends ChryseApp {
   override val additionalSubcommands = Seq(rom)
   override val cxxrtlOptions = Some(
     CxxrtlOptions(
-      platforms = Seq(new CxxrtlPlatform("cxxrtl") { val clockHz = 3_000_000 }),
+      platforms = Seq(new CxxrtlZigPlatform("cxxrtl") {
+        val clockHz = 3_000_000
+      }),
     ),
   )
 

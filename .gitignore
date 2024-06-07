@@ -1,5 +1,7 @@
 build/
 *.vcd
+.zig-cache/
+zig-out/
 
 target/
 test_run_dir/

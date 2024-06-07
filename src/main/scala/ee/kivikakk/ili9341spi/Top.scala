@@ -23,10 +23,6 @@ class IliIO extends Bundle {
 class Top(implicit platform: Platform) extends Module {
   override def desiredName = "ili9341spi"
 
-  val spifr = Module(new SpiFlashReader)
-  spifr.io.req.noenq()
-  spifr.io.resp.nodeq()
-
   val ili    = Wire(new IliIO)
   val resReg = RegInit(true.B) // start with reset on.
   ili.res := resReg
@@ -148,13 +144,6 @@ class Top(implicit platform: Platform) extends Module {
 
       plat.resources.pmod2(1).o := plat.resources.uart.rx
 
-      plat.resources.spiFlash.cs    := spifr.pins.cs
-      plat.resources.spiFlash.clock := spifr.pins.clock
-      plat.resources.spiFlash.copi  := spifr.pins.copi
-      spifr.pins.cipo               := plat.resources.spiFlash.cipo
-      plat.resources.spiFlash.wp    := false.B
-      plat.resources.spiFlash.hold  := false.B
-
       plat.resources.ledg := state === State.sWriteImg
 
     case plat: Ulx3SPlatform =>
@@ -162,13 +151,6 @@ class Top(implicit platform: Platform) extends Module {
 
       plat.resources.uart.tx := uart.pins.tx
       uart.pins.rx           := plat.resources.uart.rx
-
-      plat.resources.spiFlash.cs    := spifr.pins.cs
-      plat.resources.spiFlash.clock := spifr.pins.clock
-      plat.resources.spiFlash.copi  := spifr.pins.copi
-      spifr.pins.cipo               := plat.resources.spiFlash.cipo
-      plat.resources.spiFlash.wp    := false.B
-      plat.resources.spiFlash.hold  := false.B
 
     case plat: CxxrtlPlatform =>
       val io = IO(new IliIO)
