@@ -41,6 +41,11 @@ pub fn halt(self: *SimThread) void {
     self.running = false;
 }
 
+pub fn joinDeinit(self: *SimThread) void {
+    self.thread.join();
+    std.heap.c_allocator.destroy(self);
+}
+
 fn run(sim_thread: *SimThread) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -59,13 +64,26 @@ const State = struct {
     cxxrtl: Cxxrtl,
     vcd: ?Cxxrtl.Vcd,
 
+    clock: Cxxrtl.Object(bool),
+    reset: Cxxrtl.Object(bool),
+
     fn init(alloc: std.mem.Allocator, sim_thread: *SimThread) State {
         const cxxrtl = Cxxrtl.init();
 
         var vcd: ?Cxxrtl.Vcd = null;
         if (sim_thread.vcd_out != null) vcd = Cxxrtl.Vcd.init(cxxrtl);
 
-        return .{ .sim_thread = sim_thread, .alloc = alloc, .cxxrtl = cxxrtl, .vcd = vcd };
+        const clock = cxxrtl.get(bool, "clock");
+        const reset = cxxrtl.get(bool, "reset");
+
+        return .{
+            .sim_thread = sim_thread,
+            .alloc = alloc,
+            .cxxrtl = cxxrtl,
+            .vcd = vcd,
+            .clock = clock,
+            .reset = reset,
+        };
     }
 
     fn deinit(self: *State) void {
@@ -74,22 +92,31 @@ const State = struct {
     }
 
     fn run(self: *State) !void {
-        const clock = self.cxxrtl.get(bool, "clock");
-
-        // TODO: reset.
+        self.sim_thread.lock();
+        self.reset.next(true);
+        self.cycle();
+        self.reset.next(false);
+        self.sim_thread.unlock();
 
         while (self.sim_thread.lockIfRunning()) {
             defer self.sim_thread.unlock();
-
-            clock.next(true);
-            self.cxxrtl.step();
-            if (self.vcd) |*vcd| vcd.sample();
-
-            clock.next(false);
-            self.cxxrtl.step();
-            if (self.vcd) |*vcd| vcd.sample();
+            self.cycle();
         }
 
+        try self.writeVcd();
+    }
+
+    fn cycle(self: *State) void {
+        self.clock.next(false);
+        self.cxxrtl.step();
+        if (self.vcd) |*vcd| vcd.sample();
+
+        self.clock.next(true);
+        self.cxxrtl.step();
+        if (self.vcd) |*vcd| vcd.sample();
+    }
+
+    fn writeVcd(self: *State) !void {
         if (self.vcd) |*vcd| {
             const buffer = try vcd.read(self.alloc);
             defer self.alloc.free(buffer);

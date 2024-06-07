@@ -53,6 +53,9 @@ pub fn main() !void {
         while (SDL.pollEvent()) |ev| {
             switch (ev) {
                 .quit => sim_thread.halt(),
+                .key_down => |key| {
+                    if (key.keycode == .escape) sim_thread.halt();
+                },
                 else => {},
             }
         }
@@ -61,4 +64,6 @@ pub fn main() !void {
 
         renderer.present();
     }
+
+    sim_thread.joinDeinit();
 }
