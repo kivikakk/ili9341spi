@@ -14,6 +14,12 @@ clk: Cxxrtl.Sample(bool),
 sr: u8 = 0,
 index: u8 = 0,
 
+const Tick = union(enum) {
+    Nop,
+    Command: u8,
+    Data: u8,
+};
+
 pub fn init(cxxrtl: Cxxrtl) SpiConnector {
     const cipo = cxxrtl.get(bool, "bb_cipo");
     const blk = Cxxrtl.Sample(bool).init(cxxrtl, "bb_blk", false);
@@ -32,11 +38,13 @@ pub fn init(cxxrtl: Cxxrtl) SpiConnector {
     };
 }
 
-pub fn tick(self: *SpiConnector) void {
+pub fn tick(self: *SpiConnector) Tick {
     const dc = self.dc.tick();
     const res = self.res.tick();
     const copi = self.copi.tick();
     const clk = self.clk.tick();
+
+    var result: Tick = .Nop;
 
     if (res.curr) {
         self.sr = 0;
@@ -48,11 +56,13 @@ pub fn tick(self: *SpiConnector) void {
         if (self.index < 7)
             self.index += 1
         else if (dc.curr) {
-            // self.sr is command
+            result = .{ .Command = self.sr };
             self.index = 0;
         } else {
-            // self.sr is data
+            result = .{ .Data = self.sr };
             self.index = 0;
         }
     }
+
+    return result;
 }

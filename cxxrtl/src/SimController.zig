@@ -18,9 +18,20 @@ pub fn start(alloc: std.mem.Allocator, vcd_out: ?[]const u8) !*SimController {
         .thread = undefined,
         .vcd_out = vcd_out,
     };
-    const thread = try std.Thread.spawn(.{}, run, .{sim_controller});
+    const thread = try std.Thread.spawn(.{}, simThreadStart, .{sim_controller});
     sim_controller.thread = thread;
     return sim_controller;
+}
+
+fn simThreadStart(sim_controller: *SimController) void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
+
+    var state = SimThread.init(alloc, sim_controller);
+    defer state.deinit();
+
+    state.run() catch std.debug.panic("SimThread.run threw", .{});
 }
 
 pub fn lockIfRunning(self: *SimController) bool {
@@ -51,15 +62,4 @@ pub fn halt(self: *SimController) void {
 pub fn joinDeinit(self: *SimController) void {
     self.thread.join();
     self.controller_alloc.destroy(self);
-}
-
-fn run(sim_thread: *SimController) void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
-
-    var state = SimThread.init(alloc, sim_thread);
-    defer state.deinit();
-
-    state.run() catch std.debug.panic("SimThread.State.run threw", .{});
 }

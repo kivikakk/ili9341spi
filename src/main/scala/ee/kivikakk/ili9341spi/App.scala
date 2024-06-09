@@ -9,6 +9,9 @@ import ee.hrzn.chryse.platform.ecp5.Lfe5U_45F
 import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
 import ee.kivikakk.ili9341spi.lcd.LcdInit
+import org.apache.commons.io.FileUtils
+
+import java.io.File
 
 object App extends ChryseApp {
   override val name                                  = "ili9341spi"
@@ -37,7 +40,12 @@ object App extends ChryseApp {
       },
     )
   override val cxxrtlPlatforms = Seq(new CxxrtlZigPlatform("cxxrtl") {
-    val clockHz = 500_000
+    val clockHz = 1_000_000
+
+    override def preBuild() = {
+      val romPath = rom.generate()
+      FileUtils.copyFile(new File(romPath), new File(s"$simDir/src/rom.bin"))
+    }
   })
   override val additionalSubcommands = Seq(rom)
 

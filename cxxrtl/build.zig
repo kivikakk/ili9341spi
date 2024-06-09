@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const yosys_data_dir = b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)") orelse guessYosysDataDir(b);
     const cxxrtl_o_paths = b.option([]const u8, "cxxrtl_o_paths", "comma-separated paths to .o files to link against, including CXXRTL simulation") orelse
         "../build/cxxrtl/ili9341spi.o";
+    const clock_hz = b.option(usize, "clock_hz", "clock speed the gateware is elaborated at in Hz") orelse 1_000_000;
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -27,6 +28,10 @@ pub fn build(b: *std.Build) void {
     }
 
     exe.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include/backends/cxxrtl/runtime", .{yosys_data_dir}) });
+
+    const options = b.addOptions();
+    options.addOption(usize, "clock_hz", clock_hz);
+    exe.root_module.addOptions("options", options);
 
     b.installArtifact(exe);
 

@@ -2,6 +2,7 @@ build/
 *.vcd
 .zig-cache/
 zig-out/
+rom.bin
 
 target/
 test_run_dir/
