@@ -9,7 +9,7 @@ const SimThread = @This();
 
 pub const WIDTH = 320;
 pub const HEIGHT = 240;
-pub const Color = packed struct(u32) { r: u8, g: u8, b: u8, a: u8 };
+pub const Color = packed struct(u16) { r: u5, g: u6, b: u5 };
 pub const ImgData = [HEIGHT * WIDTH]Color;
 
 sim_controller: *SimController,
@@ -24,7 +24,7 @@ reset: Cxxrtl.Object(bool),
 spi_connector: SpiConnector,
 uart_connector: UartConnector,
 
-img_data: ImgData = [_]Color{.{ .r = 0, .g = 0, .b = 0, .a = 255 }} ** (HEIGHT * WIDTH),
+img_data: ImgData = [_]Color{.{ .r = 0, .g = 0, .b = 0 }} ** (HEIGHT * WIDTH),
 img_data_new: bool = true,
 
 pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread {
@@ -151,12 +151,7 @@ pub fn run(self: *SimThread) !void {
                         const g: u6 = @truncate(((data0 & 0b111) << 3) | (data >> 5));
                         const b: u5 = @truncate(data & 0b00011111);
 
-                        self.img_data[@as(usize, pag) * WIDTH + col] = .{
-                            .r = @as(u8, r) << 3,
-                            .g = @as(u8, g) << 2,
-                            .b = @as(u8, b) << 3,
-                            .a = 255,
-                        };
+                        self.img_data[@as(usize, pag) * WIDTH + col] = .{ .r = r, .g = g, .b = b };
                         self.img_data_new = true;
 
                         state = .MemoryWriteA;

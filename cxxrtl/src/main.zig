@@ -35,7 +35,7 @@ pub fn main() !void {
     });
     defer renderer.destroy();
 
-    var itexture = try SDL.createTexture(renderer, .abgr8888, .streaming, SimThread.WIDTH, SimThread.HEIGHT);
+    var itexture = try SDL.createTexture(renderer, .bgr565, .streaming, SimThread.WIDTH, SimThread.HEIGHT);
     defer itexture.destroy();
 
     var ticks_last = SDL.getTicks64();
@@ -68,7 +68,7 @@ pub fn main() !void {
             var pix = try itexture.lock(null);
             defer pix.release();
 
-            std.debug.assert(pix.stride == SimThread.WIDTH * 4);
+            std.debug.assert(pix.stride == SimThread.WIDTH * 2);
             @memcpy(@as(*SimThread.ImgData, @ptrCast(@alignCast(pix.pixels))), &img_data);
         }
 
