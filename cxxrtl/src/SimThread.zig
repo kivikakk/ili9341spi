@@ -7,9 +7,10 @@ const UartConnector = @import("./UartConnector.zig");
 
 const SimThread = @This();
 
-const WIDTH = 320;
-const HEIGHT = 240;
-const Color = struct { r: u8 = 0, g: u8 = 0, b: u8 = 0 };
+pub const WIDTH = 320;
+pub const HEIGHT = 240;
+pub const Color = packed struct(u32) { r: u8, g: u8, b: u8, a: u8 };
+pub const ImgData = [HEIGHT * WIDTH]Color;
 
 sim_controller: *SimController,
 alloc: std.mem.Allocator,
@@ -23,7 +24,8 @@ reset: Cxxrtl.Object(bool),
 spi_connector: SpiConnector,
 uart_connector: UartConnector,
 
-img_data: [HEIGHT * WIDTH]Color = [_]Color{.{}} ** (HEIGHT * WIDTH),
+img_data: ImgData = [_]Color{.{ .r = 0, .g = 0, .b = 0, .a = 255 }} ** (HEIGHT * WIDTH),
+img_data_new: bool = true,
 
 pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread {
     const cxxrtl = Cxxrtl.init();
@@ -119,6 +121,7 @@ pub fn run(self: *SimThread) !void {
                             3 => s: {
                                 sc = d.sc;
                                 ec = d.ec | data;
+                                std.debug.print("CASET: {x:0>4}..{x:0>4} ({d}..{d})\n", .{ sc, ec, sc, ec });
                                 break :s .Idle;
                             },
                         };
@@ -131,6 +134,7 @@ pub fn run(self: *SimThread) !void {
                             3 => s: {
                                 sp = d.sp;
                                 ep = d.ep | data;
+                                std.debug.print("PASET: {x:0>4}..{x:0>4} ({d}..{d})\n", .{ sp, ep, sp, ep });
                                 break :s .Idle;
                             },
                         };
@@ -147,11 +151,15 @@ pub fn run(self: *SimThread) !void {
                         const g: u6 = @truncate(((data0 & 0b111) << 3) | (data >> 5));
                         const b: u5 = @truncate(data & 0b00011111);
 
-                        self.img_data[pag * HEIGHT + col] = .{
+                        self.img_data[@as(usize, pag) * WIDTH + col] = .{
                             .r = @as(u8, r) << 3,
                             .g = @as(u8, g) << 2,
                             .b = @as(u8, b) << 3,
+                            .a = 255,
                         };
+                        self.img_data_new = true;
+
+                        state = .MemoryWriteA;
 
                         if (col == ec) {
                             if (pag == ep) {
@@ -159,9 +167,11 @@ pub fn run(self: *SimThread) !void {
                                 pag = sp;
                                 // Just finish for now, iirc MADCTL varies this.
                                 state = .Idle;
+                                std.debug.print("MemoryWriteB wrapped\n", .{});
+                            } else {
+                                pag += 1;
+                                col = sc;
                             }
-                            pag += 1;
-                            col = sc;
                         } else {
                             col += 1;
                         }

@@ -3,6 +3,7 @@ const SDL = @import("sdl2");
 
 const Args = @import("./Args.zig");
 const SimController = @import("./SimController.zig");
+const SimThread = @import("./SimThread.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -34,12 +35,18 @@ pub fn main() !void {
     });
     defer renderer.destroy();
 
+    var itexture = try SDL.createTexture(renderer, .abgr8888, .streaming, SimThread.WIDTH, SimThread.HEIGHT);
+    defer itexture.destroy();
+
     var ticks_last = SDL.getTicks64();
     var cycles_last: usize = 0;
     var frame_count: usize = 0;
 
+    var img_data: SimThread.ImgData = undefined;
+
     while (sim_controller.lockIfRunning()) {
         const cycles_now = sim_controller.cycleNumber();
+        var updated_img_data = false;
 
         {
             defer sim_controller.unlock();
@@ -53,9 +60,21 @@ pub fn main() !void {
                     else => {},
                 }
             }
+
+            updated_img_data = sim_controller.maybeUpdateImgData(&img_data);
+        }
+
+        if (updated_img_data) {
+            var pix = try itexture.lock(null);
+            defer pix.release();
+
+            std.debug.assert(pix.stride == SimThread.WIDTH * 4);
+            @memcpy(@as(*SimThread.ImgData, @ptrCast(@alignCast(pix.pixels))), &img_data);
         }
 
         try renderer.clear();
+
+        try renderer.copy(itexture, null, null);
 
         renderer.present();
         frame_count += 1;
