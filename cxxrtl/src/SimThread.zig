@@ -7,6 +7,10 @@ const UartConnector = @import("./UartConnector.zig");
 
 const SimThread = @This();
 
+const WIDTH = 320;
+const HEIGHT = 240;
+const Color = struct { r: u8 = 0, g: u8 = 0, b: u8 = 0 };
+
 sim_controller: *SimController,
 alloc: std.mem.Allocator,
 
@@ -18,6 +22,8 @@ reset: Cxxrtl.Object(bool),
 
 spi_connector: SpiConnector,
 uart_connector: UartConnector,
+
+img_data: [HEIGHT * WIDTH]Color = [_]Color{.{}} ** (HEIGHT * WIDTH),
 
 pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread {
     const cxxrtl = Cxxrtl.init();
@@ -55,7 +61,26 @@ pub fn run(self: *SimThread) !void {
     self.reset.next(false);
     self.sim_controller.unlock();
 
-    var in_mem_write = false;
+    // XXX: We handle barely any of MADCTL, so this is incredibly specific to
+    // our design for now.
+
+    var rot: bool = false;
+    var sc: u16 = 0x0000;
+    var ec: u16 = 0x00ef;
+    var sp: u16 = 0x0000;
+    var ep: u16 = 0x013f;
+
+    var col: u16 = sc;
+    var pag: u16 = sp;
+
+    var state: union(enum) {
+        Idle,
+        Caset: struct { ix: u2 = 0, sc: u16 = 0, ec: u16 = 0 },
+        Paset: struct { ix: u2 = 0, sp: u16 = 0, ep: u16 = 0 },
+        MadCtl,
+        MemoryWriteA,
+        MemoryWriteB: u8,
+    } = .Idle;
 
     while (self.sim_controller.lockIfRunning()) {
         defer self.sim_controller.unlock();
@@ -64,17 +89,84 @@ pub fn run(self: *SimThread) !void {
         switch (self.spi_connector.tick()) {
             .Nop => {},
             .Command => |cmd| {
-                if (cmd == 0x2c) {
-                    std.debug.print("got MEMORY_WRITE\n", .{});
-                    in_mem_write = true;
+                if (state != .Idle and state != .MemoryWriteA) {
+                    std.debug.panic("got command {x:0>2} in state {s}", .{ cmd, @tagName(state) });
+                }
+
+                if (cmd == 0x36) {
+                    state = .MadCtl;
+                } else if (cmd == 0x2a) {
+                    state = .{ .Caset = .{} };
+                } else if (cmd == 0x2b) {
+                    state = .{ .Paset = .{} };
+                } else if (cmd == 0x2c) {
+                    state = .MemoryWriteA;
+                    col = sc;
+                    pag = sp;
                     self.uart_connector.go();
                 } else {
-                    in_mem_write = false;
+                    state = .Idle;
                 }
             },
             .Data => |data| {
-                if (in_mem_write)
-                    std.debug.print("got data in MEMORY_WRITE: {x:0>2}\n", .{data});
+                switch (state) {
+                    .Idle => {}, // unhandled command
+                    .Caset => |*d| {
+                        state = switch (d.ix) {
+                            0 => .{ .Caset = .{ .ix = 1, .sc = (@as(u16, data) << 8) } },
+                            1 => .{ .Caset = .{ .ix = 2, .sc = d.sc | data } },
+                            2 => .{ .Caset = .{ .ix = 3, .sc = d.sc, .ec = (@as(u16, data) << 8) } },
+                            3 => s: {
+                                sc = d.sc;
+                                ec = d.ec | data;
+                                break :s .Idle;
+                            },
+                        };
+                    },
+                    .Paset => |*d| {
+                        state = switch (d.ix) {
+                            0 => .{ .Paset = .{ .ix = 1, .sp = (@as(u16, data) << 8) } },
+                            1 => .{ .Paset = .{ .ix = 2, .sp = d.sp | data } },
+                            2 => .{ .Paset = .{ .ix = 3, .sp = d.sp, .ep = (@as(u16, data) << 8) } },
+                            3 => s: {
+                                sp = d.sp;
+                                ep = d.ep | data;
+                                break :s .Idle;
+                            },
+                        };
+                    },
+                    .MadCtl => {
+                        rot = (data & 0b00100000) != 0;
+                        state = .Idle;
+                    },
+                    .MemoryWriteA => {
+                        state = .{ .MemoryWriteB = data };
+                    },
+                    .MemoryWriteB => |data0| {
+                        const r: u5 = @truncate((data0 & 0b11111000) >> 3);
+                        const g: u6 = @truncate(((data0 & 0b111) << 3) | (data >> 5));
+                        const b: u5 = @truncate(data & 0b00011111);
+
+                        self.img_data[pag * HEIGHT + col] = .{
+                            .r = @as(u8, r) << 3,
+                            .g = @as(u8, g) << 2,
+                            .b = @as(u8, b) << 3,
+                        };
+
+                        if (col == ec) {
+                            if (pag == ep) {
+                                col = sc;
+                                pag = sp;
+                                // Just finish for now, iirc MADCTL varies this.
+                                state = .Idle;
+                            }
+                            pag += 1;
+                            col = sc;
+                        } else {
+                            col += 1;
+                        }
+                    },
+                }
             },
         }
         self.uart_connector.tick();
