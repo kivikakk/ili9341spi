@@ -14,30 +14,34 @@ class Initter(implicit platform: Platform) extends Module {
     val done = Output(Bool())
   })
 
-  io.done := false.B
-
-  val resReg = RegInit(true.B) // start with reset on.
-  io.res := resReg
-
   io.lcd.req.noenq()
   io.lcd.resp.nodeq()
+
+  private val resReg = RegInit(true.B) // start with reset on.
+  io.res := resReg
+
+  io.done := false.B
+
+  ////
 
   object State extends ChiselEnum {
     val sResetApply, sResetWait, sInitCmd, sInitParam, sDone = Value
   }
 
-  val state         = RegInit(State.sResetApply)
-  val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
-  val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
-  val resTimerReg   = RegInit(resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W))
-  val initRomLen    = LcdInit.rom.length
-  val initRomIxReg  = RegInit(0.U(unsignedBitLength(initRomLen).W))
-  val initCmdRemReg = Reg(
+  private val state         = RegInit(State.sResetApply)
+  private val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
+  private val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
+  private val resTimerReg = RegInit(
+    resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W),
+  )
+  private val initRomLen   = LcdInit.rom.length
+  private val initRomIxReg = RegInit(0.U(unsignedBitLength(initRomLen).W))
+  private val initCmdRemReg = Reg(
     UInt(unsignedBitLength(LcdInit.sequence.map(_._2.length).max).W),
   )
   // We spend quite a few cells on this. TODO (Chryse): BRAM init.
   // Cbf putting every tiny initted memory on SPI flash.
-  val initRom = VecInit(LcdInit.rom)
+  private val initRom = VecInit(LcdInit.rom)
 
   switch(state) {
     is(State.sResetApply) {

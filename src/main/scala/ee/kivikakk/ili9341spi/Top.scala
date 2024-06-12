@@ -40,6 +40,8 @@ class Top(implicit platform: Platform) extends Module {
   uart.io.rx.nodeq()
   uart.io.tx :<>= lcd.io.resp
 
+  ////
+
   object State extends ChiselEnum {
     val sInit, sWriteImg = Value
   }
@@ -56,6 +58,7 @@ class Top(implicit platform: Platform) extends Module {
       initter.io.lcd :<>= lcd.io
       ili.res := initter.io.res
       when(initter.io.done) {
+        uart.io.tx.enq(0xff.U)
         state := State.sWriteImg
       }
     }
@@ -97,8 +100,8 @@ class Top(implicit platform: Platform) extends Module {
       uart.pins.rx           := plat.resources.uart.rx
 
     case plat: CxxrtlPlatform =>
-      val bb = IO(new IliIO)
-      bb :<>= ili
+      val spi = IO(new IliIO)
+      spi :<>= ili
 
       val uart_rx = IO(Input(Bool()))
       uart.pins.rx := uart_rx

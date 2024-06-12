@@ -21,12 +21,12 @@ const Tick = union(enum) {
 };
 
 pub fn init(cxxrtl: Cxxrtl) SpiConnector {
-    const cipo = cxxrtl.get(bool, "bb_cipo");
-    const blk = Cxxrtl.Sample(bool).init(cxxrtl, "bb_blk", false);
-    const dc = Cxxrtl.Sample(bool).init(cxxrtl, "bb_dc", false);
-    const res = Cxxrtl.Sample(bool).init(cxxrtl, "bb_res", false);
-    const copi = Cxxrtl.Sample(bool).init(cxxrtl, "bb_copi", false);
-    const clk = Cxxrtl.Sample(bool).init(cxxrtl, "bb_clk", false);
+    const cipo = cxxrtl.get(bool, "spi_cipo");
+    const blk = Cxxrtl.Sample(bool).init(cxxrtl, "spi_blk", false);
+    const dc = Cxxrtl.Sample(bool).init(cxxrtl, "spi_dc", false);
+    const res = Cxxrtl.Sample(bool).init(cxxrtl, "spi_res", false);
+    const copi = Cxxrtl.Sample(bool).init(cxxrtl, "spi_copi", false);
+    const clk = Cxxrtl.Sample(bool).init(cxxrtl, "spi_clk", false);
 
     return .{
         .cipo = cipo,
