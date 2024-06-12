@@ -48,8 +48,9 @@ class Top(implicit platform: Platform) extends Module {
     val sInitiate                           = Value
     val sLoad, sLoadWait, sRender, sRender2 = Value
 
-    val sProgressLoad, sProgressWait, sProgressPart, sProgressWrite = Value
-    val sTransitionLoad, sTransitionWait, sTransitionWrite          = Value
+    val sEvolveStart, sEvolveLoad, sEvolveWait, sEvolvePart, sEvolveWrite =
+      Value
+    val sTransitionLoad, sTransitionWait, sTransitionWrite = Value
   }
   private val state = RegInit(State.sInit)
 
@@ -64,16 +65,9 @@ class Top(implicit platform: Platform) extends Module {
   private val GOL_CELLCNT = GOL_WIDTH * GOL_HEIGHT
 
   private val start = """................................
-                        |........#.......................
-                        |.........#.................##...
-                        |.......###.................##...
-                        |................................
-                        |................................
-                        |................................
-                        |................................
-                        |....#...........................
-                        |.....#..........................
-                        |...###..........................
+                        |...........................#....
+                        |............................#...
+                        |..........................###...
                         |................................
                         |................................
                         |................................
@@ -81,9 +75,16 @@ class Top(implicit platform: Platform) extends Module {
                         |................................
                         |................................
                         |................................
-                        |..###...........................
+                        |.........................###....
                         |................................
                         |................................
+                        |................................
+                        |................................
+                        |................................
+                        |................................
+                        |...............................#
+                        |#.................##............
+                        |#.................##..........##
                         |................................
                         |................................
                         |................................
@@ -213,10 +214,8 @@ class Top(implicit platform: Platform) extends Module {
         when(colReg === (LCD_WIDTH - 1).U) {
           colReg := 0.U
           when(pagReg === (LCD_HEIGHT - 1).U) {
-            pagReg             := 0.U
-            plIxReg            := 0.U
-            neighboursAliveReg := 0.U
-            state              := State.sProgressLoad
+            pagReg := 0.U
+            state  := State.sEvolveStart
           }.otherwise {
             pagReg := pagReg + 1.U
           }
@@ -226,39 +225,38 @@ class Top(implicit platform: Platform) extends Module {
       }
     }
 
-    is(State.sProgressLoad) {
-      when(plIxReg === 0.U)(nowAddr := cellIxAt(colReg + 0.U, pagReg + 0.U))
-        .elsewhen(plIxReg === 1.U)(
-          nowAddr := cellIxAt(colReg + 1.U, pagReg + 0.U),
-        )
-        .elsewhen(plIxReg === 2.U)(
-          nowAddr := cellIxAt(colReg + 2.U, pagReg + 0.U),
-        )
-        .elsewhen(plIxReg === 3.U)(
-          nowAddr := cellIxAt(colReg + 0.U, pagReg + 1.U),
-        )
-        .elsewhen(plIxReg === 4.U)(
-          nowAddr := cellIxAt(colReg + 1.U, pagReg + 1.U),
-        )
-        .elsewhen(plIxReg === 5.U)(
-          nowAddr := cellIxAt(colReg + 2.U, pagReg + 1.U),
-        )
-        .elsewhen(plIxReg === 6.U)(
-          nowAddr := cellIxAt(colReg + 0.U, pagReg + 2.U),
-        )
-        .elsewhen(plIxReg === 7.U)(
-          nowAddr := cellIxAt(colReg + 1.U, pagReg + 2.U),
-        )
-        .elsewhen(plIxReg === 8.U)(
-          nowAddr := cellIxAt(colReg + 2.U, pagReg + 2.U),
-        )
+    is(State.sEvolveStart) {
+      plIxReg            := 0.U
+      neighboursAliveReg := 0.U
+      state              := State.sEvolveLoad
+    }
+    is(State.sEvolveLoad) {
+      when(plIxReg === 0.U) {
+        nowAddr := cellIxAt(colReg + 0.U, pagReg + 0.U)
+      }.elsewhen(plIxReg === 1.U) {
+        nowAddr := cellIxAt(colReg + 1.U, pagReg + 0.U)
+      }.elsewhen(plIxReg === 2.U) {
+        nowAddr := cellIxAt(colReg + 2.U, pagReg + 0.U)
+      }.elsewhen(plIxReg === 3.U) {
+        nowAddr := cellIxAt(colReg + 0.U, pagReg + 1.U)
+      }.elsewhen(plIxReg === 4.U) {
+        nowAddr := cellIxAt(colReg + 1.U, pagReg + 1.U)
+      }.elsewhen(plIxReg === 5.U) {
+        nowAddr := cellIxAt(colReg + 2.U, pagReg + 1.U)
+      }.elsewhen(plIxReg === 6.U) {
+        nowAddr := cellIxAt(colReg + 0.U, pagReg + 2.U)
+      }.elsewhen(plIxReg === 7.U) {
+        nowAddr := cellIxAt(colReg + 1.U, pagReg + 2.U)
+      }.elsewhen(plIxReg === 8.U) {
+        nowAddr := cellIxAt(colReg + 2.U, pagReg + 2.U)
+      }
 
-      state := State.sProgressWait
+      state := State.sEvolveWait
     }
-    is(State.sProgressWait) {
-      state := State.sProgressPart
+    is(State.sEvolveWait) {
+      state := State.sEvolvePart
     }
-    is(State.sProgressPart) {
+    is(State.sEvolvePart) {
       when(plIxReg === 4.U) {
         wasAliveReg := nowReadData
       }.otherwise {
@@ -266,12 +264,12 @@ class Top(implicit platform: Platform) extends Module {
       }
       when(plIxReg =/= 8.U) {
         plIxReg := plIxReg + 1.U
-        state   := State.sProgressLoad
+        state   := State.sEvolveLoad
       }.otherwise {
-        state := State.sProgressWrite
+        state := State.sEvolveWrite
       }
     }
-    is(State.sProgressWrite) {
+    is(State.sEvolveWrite) {
       nextAddr    := directCellIx
       nextWriteEn := true.B
 
@@ -281,9 +279,7 @@ class Top(implicit platform: Platform) extends Module {
         nextWriteData := (neighboursAliveReg === 3.U)
       }
 
-      plIxReg            := 0.U
-      neighboursAliveReg := 0.U
-      state              := State.sProgressLoad
+      state := State.sEvolveStart
       when(colReg === (GOL_WIDTH - 1).U) {
         colReg := 0.U
         when(pagReg === (GOL_HEIGHT - 1).U) {
