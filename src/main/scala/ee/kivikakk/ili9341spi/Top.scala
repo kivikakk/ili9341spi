@@ -8,6 +8,7 @@ import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
 import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
 import ee.kivikakk.ili9341spi.lcd.Lcd
+import ee.kivikakk.ili9341spi.lcd.LcdCommand
 import ee.kivikakk.ili9341spi.lcd.LcdRequest
 
 private class IliIO extends Bundle {
@@ -42,7 +43,13 @@ class Top(implicit platform: Platform) extends Module {
   ////
 
   object State extends ChiselEnum {
-    val sInit, sRender, sRender2, sWaitPress, sProgress, sTransition = Value
+    val sInit, sInitRam = Value
+
+    val sInitiate                           = Value
+    val sLoad, sLoadWait, sRender, sRender2 = Value
+
+    val sProgressLoad, sProgressWait, sProgressWrite       = Value
+    val sTransitionLoad, sTransitionWait, sTransitionWrite = Value
   }
   private val state = RegInit(State.sInit)
 
@@ -56,8 +63,8 @@ class Top(implicit platform: Platform) extends Module {
   private val GOL_HEIGHT  = LCD_HEIGHT / GOL_SIZE
   private val GOL_CELLCNT = GOL_WIDTH * GOL_HEIGHT
 
-  private val start = """................
-                        |................
+  private val start = """..............#.
+                        |..............#.
                         |................
                         |................
                         |................
@@ -66,43 +73,59 @@ class Top(implicit platform: Platform) extends Module {
                         |...........#....
                         |................
                         |................
-                        |................
-                        |................
+                        |...###..........
+                        |..............#.
                         |""".stripMargin.replace("\n", "")
 
-  private val golCells = RegInit(VecInit(for {
+  private val golInit = VecInit(for {
     i <- 0 until GOL_CELLCNT
-  } yield (start(i) != '.').B))
-  private val golCellsNext = Reg(Vec(GOL_CELLCNT, Bool()))
+  } yield (start(i) != '.').B)
+
+  private val nowCells = SRAM(GOL_CELLCNT, Bool(), 0, 0, 1)
+  val nowAddr          = RegInit(0.U(unsignedBitLength(GOL_CELLCNT - 1).W))
+  val nowReadData      = WireInit(nowCells.readwritePorts(0).readData)
+  val nowWriteEn       = Reg(Bool())
+  nowWriteEn := false.B
+  val nowWriteData = Reg(Bool())
+  nowCells.readwritePorts(0).address   := nowAddr
+  nowCells.readwritePorts(0).enable    := true.B
+  nowCells.readwritePorts(0).isWrite   := nowWriteEn
+  nowCells.readwritePorts(0).writeData := nowWriteData
+
+  private val nextCells = SRAM(GOL_CELLCNT, Bool(), 0, 0, 1)
+  val nextAddr          = RegInit(0.U(unsignedBitLength(GOL_CELLCNT - 1).W))
+  val nextReadData      = WireInit(nextCells.readwritePorts(0).readData)
+  val nextWriteEn       = Reg(Bool())
+  nextWriteEn := false.B
+  val nextWriteData = Reg(Bool())
+  nextCells.readwritePorts(0).address   := nextAddr
+  nextCells.readwritePorts(0).enable    := true.B
+  nextCells.readwritePorts(0).isWrite   := nextWriteEn
+  nextCells.readwritePorts(0).writeData := nextWriteData
 
   private val colReg = RegInit(0.U(unsignedBitLength(LCD_WIDTH - 1).W))
   private val pagReg = RegInit(0.U(unsignedBitLength(LCD_HEIGHT - 1).W))
 
-  private def cellIxAt(col: UInt, pag: UInt): UInt =
-    col + (pag * GOL_WIDTH.U)
+  // To avoid nonsense, we define the 'real' range of x as [1..GOL_WIDTH] and y
+  // as [1..GOL_HEIGHT], and define our UInts up to GOL_WIDTH+1 and GOL_HEIGHT+1
+  // inclusive. This way we can detect wraps without having to reach for signed
+  // integers.
+  private def cellIxAt(x: UInt, y: UInt): UInt = {
+    val effX = Wire(UInt(unsignedBitLength(GOL_CELLCNT - 1).W))
+    when(x === 0.U)(effX := (GOL_WIDTH - 1).U)
+      .elsewhen(x === (GOL_WIDTH + 1).U)(effX := 0.U)
+      .otherwise(effX := x - 1.U)
+    val effY = Wire(UInt(unsignedBitLength(GOL_CELLCNT - 1).W))
+    when(y === 0.U)(effY := (GOL_HEIGHT - 1).U)
+      .elsewhen(y === (GOL_HEIGHT + 1).U)(effY := 0.U)
+      .otherwise(effY := y - 1.U)
+    (effX + (effY * GOL_WIDTH.U))(unsignedBitLength(GOL_CELLCNT - 1) - 1, 0)
+  }
 
-  private def cellValAt(col: UInt, pag: UInt): Bool =
-    golCells(cellIxAt(col, pag))
+  private val cellX = (colReg / GOL_SIZE.U) + 1.U
+  private val cellY = (pagReg / GOL_SIZE.U) + 1.U
 
-  private val cellCol = colReg / GOL_SIZE.U
-  private val cellPag = pagReg / GOL_SIZE.U
-
-  private val neighboursAlive = Wire(UInt(unsignedBitLength(8).W))
-  neighboursAlive :=
-    PopCount(
-      Seq(
-        cellValAt(colReg - 1.U, pagReg - 1.U),
-        cellValAt(colReg + 0.U, pagReg - 1.U),
-        cellValAt(colReg + 1.U, pagReg - 1.U),
-        //
-        cellValAt(colReg - 1.U, pagReg + 0.U),
-        cellValAt(colReg + 1.U, pagReg + 0.U),
-        //
-        cellValAt(colReg - 1.U, pagReg + 1.U),
-        cellValAt(colReg + 0.U, pagReg + 1.U),
-        cellValAt(colReg + 1.U, pagReg + 1.U),
-      ),
-    )
+  private val directCellIx = WireInit(cellIxAt(colReg + 1.U, pagReg + 1.U))
 
   switch(state) {
     is(State.sInit) {
@@ -110,13 +133,49 @@ class Top(implicit platform: Platform) extends Module {
       ili.res := initter.io.res
       when(initter.io.done) {
         uart.io.tx.enq(0xff.U)
-        state := State.sRender
+        state := State.sInitRam
+      }
+    }
+    is(State.sInitRam) {
+      nowAddr      := directCellIx
+      nowWriteEn   := true.B
+      nowWriteData := golInit(directCellIx)
+
+      when(colReg === (GOL_WIDTH - 1).U) {
+        colReg := 0.U
+        when(pagReg === (GOL_HEIGHT - 1).U) {
+          pagReg := 0.U
+          state  := State.sInitiate
+        }.otherwise {
+          pagReg := pagReg + 1.U
+        }
+      }.otherwise {
+        colReg := colReg + 1.U
       }
     }
 
+    is(State.sInitiate) {
+      val req = Wire(new LcdRequest)
+      req.data    := LcdCommand.MEMORY_WRITE.asUInt
+      req.dc      := true.B
+      req.respLen := 0.U
+      lcd.io.req.enq(req)
+
+      when(lcd.io.req.fire) {
+        state := State.sLoad
+      }
+    }
+
+    is(State.sLoad) {
+      nowAddr := cellIxAt(cellX, cellY)
+      state   := State.sLoadWait
+    }
+    is(State.sLoadWait) {
+      state := State.sRender
+    }
     is(State.sRender) {
       val req = Wire(new LcdRequest)
-      req.data    := Mux(cellValAt(cellCol, cellPag), 0xff.U, 0x00.U)
+      req.data    := Mux(nowReadData, 0xff.U, 0x00.U)
       req.dc      := false.B
       req.respLen := 0.U
       lcd.io.req.enq(req)
@@ -127,19 +186,19 @@ class Top(implicit platform: Platform) extends Module {
     }
     is(State.sRender2) {
       val req = Wire(new LcdRequest)
-      req.data    := Mux(cellValAt(cellCol, cellPag), 0xff.U, 0x00.U)
+      req.data    := Mux(nowReadData, 0xff.U, 0x00.U)
       req.dc      := false.B
       req.respLen := 0.U
       lcd.io.req.enq(req)
 
       when(lcd.io.req.fire) {
-        state := State.sRender
+        state := State.sLoad
 
         when(colReg === (LCD_WIDTH - 1).U) {
           colReg := 0.U
           when(pagReg === (LCD_HEIGHT - 1).U) {
             pagReg := 0.U
-            state  := State.sWaitPress
+            state  := State.sProgressLoad
           }.otherwise {
             pagReg := pagReg + 1.U
           }
@@ -149,27 +208,32 @@ class Top(implicit platform: Platform) extends Module {
       }
     }
 
-    is(State.sWaitPress) {
-      // uart.io.rx.deq()
-      // when(uart.io.rx.fire && !uart.io.rx.bits.err) {
-      state := State.sProgress
-      // }
+    is(State.sProgressLoad) {
+      nowAddr := directCellIx
+      state   := State.sProgressWait
     }
+    is(State.sProgressWait) {
+      state := State.sProgressWrite
+    }
+    is(State.sProgressWrite) {
+      nextAddr      := directCellIx
+      nextWriteEn   := true.B
+      nextWriteData := nowReadData
 
-    is(State.sProgress) {
-      when(golCells(cellIxAt(colReg, pagReg))) {
-        golCellsNext(
-          cellIxAt(colReg, pagReg),
-        ) := (neighboursAlive === 2.U || neighboursAlive === 3.U)
-      }.otherwise {
-        golCellsNext(cellIxAt(colReg, pagReg)) := (neighboursAlive === 3.U)
-      }
+      // when(golCells(cellIxAt(colReg, pagReg))) {
+      //   golCellsNext(
+      //     cellIxAt(colReg, pagReg),
+      //   ) := (neighboursAlive === 2.U || neighboursAlive === 3.U)
+      // }.otherwise {
+      //   golCellsNext(cellIxAt(colReg, pagReg)) := (neighboursAlive === 3.U)
+      // }
 
+      state := State.sProgressLoad
       when(colReg === (GOL_WIDTH - 1).U) {
         colReg := 0.U
         when(pagReg === (GOL_HEIGHT - 1).U) {
           pagReg := 0.U
-          state  := State.sTransition
+          state  := State.sTransitionLoad
         }.otherwise {
           pagReg := pagReg + 1.U
         }
@@ -178,15 +242,25 @@ class Top(implicit platform: Platform) extends Module {
       }
     }
 
-    is(State.sTransition) {
-      golCells(cellIxAt(colReg, pagReg)) := golCellsNext(
-        cellIxAt(colReg, pagReg),
-      )
+    is(State.sTransitionLoad) {
+      nextAddr := directCellIx
+      state    := State.sTransitionWait
+    }
+    is(State.sTransitionWait) {
+      state := State.sTransitionWrite
+    }
+    is(State.sTransitionWrite) {
+      nowAddr      := directCellIx
+      nowWriteEn   := true.B
+      nowWriteData := nextReadData
+
+      state := State.sTransitionLoad
       when(colReg === (GOL_WIDTH - 1).U) {
         colReg := 0.U
         when(pagReg === (GOL_HEIGHT - 1).U) {
           pagReg := 0.U
-          state  := State.sRender
+          state  := State.sInitiate
+          uart.io.tx.enq(0x77.U)
         }.otherwise {
           pagReg := pagReg + 1.U
         }
@@ -210,7 +284,7 @@ class Top(implicit platform: Platform) extends Module {
 
       plat.resources.pmod2(1).o := plat.resources.uart.rx
 
-      plat.resources.ledg := state === State.sRender
+      plat.resources.ledg := state === State.sLoad
 
     case plat: Ulx3SPlatform =>
       ili.cipo := false.B
@@ -224,6 +298,9 @@ class Top(implicit platform: Platform) extends Module {
 
       val uart_rx = IO(Input(Bool()))
       uart.pins.rx := uart_rx
+
+      val uart_tx = IO(Output(Bool()))
+      uart_tx := uart.pins.tx
 
     case _ =>
   }

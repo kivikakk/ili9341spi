@@ -42,7 +42,6 @@ object LcdInit {
     (SLEEP_OUT, Seq()),
     (NOP, Seq()), // stand-in that means "wait 120ms"
     (DISPLAY_ON, Seq()),
-    (MEMORY_WRITE, Seq()),
   )
 
   lazy val rom: Seq[UInt] = {
