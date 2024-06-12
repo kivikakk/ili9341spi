@@ -160,8 +160,6 @@ pub fn run(self: *SimThread) !void {
                             if (pag == ep) {
                                 col = sc;
                                 pag = sp;
-                                // Just finish for now, iirc MADCTL varies this.
-                                state = .Idle;
                                 std.debug.print("MemoryWriteB wrapped\n", .{});
                             } else {
                                 pag += 1;

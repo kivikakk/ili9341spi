@@ -8,7 +8,6 @@ import ee.hrzn.chryse.platform.cxxrtl.CxxrtlPlatform
 import ee.hrzn.chryse.platform.ecp5.Ulx3SPlatform
 import ee.hrzn.chryse.platform.ice40.IceBreakerPlatform
 import ee.kivikakk.ili9341spi.lcd.Lcd
-import ee.kivikakk.ili9341spi.lcd.LcdInit
 import ee.kivikakk.ili9341spi.lcd.LcdRequest
 
 private class IliIO extends Bundle {
@@ -43,15 +42,67 @@ class Top(implicit platform: Platform) extends Module {
   ////
 
   object State extends ChiselEnum {
-    val sInit, sWriteImg = Value
+    val sInit, sRender, sRender2, sWaitPress, sProgress, sTransition = Value
   }
   private val state = RegInit(State.sInit)
 
   private val initter = Module(new Initter)
   initter.io.lcd <> DontCare
 
-  private val pngRomLen    = LcdInit.pngrom.length
-  private val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
+  private val LCD_WIDTH   = 320
+  private val LCD_HEIGHT  = 240
+  private val GOL_SIZE    = 20
+  private val GOL_WIDTH   = LCD_WIDTH / GOL_SIZE
+  private val GOL_HEIGHT  = LCD_HEIGHT / GOL_SIZE
+  private val GOL_CELLCNT = GOL_WIDTH * GOL_HEIGHT
+
+  private val start = """................
+                        |................
+                        |................
+                        |................
+                        |................
+                        |...........#....
+                        |...###.....#....
+                        |...........#....
+                        |................
+                        |................
+                        |................
+                        |................
+                        |""".stripMargin.replace("\n", "")
+
+  private val golCells = RegInit(VecInit(for {
+    i <- 0 until GOL_CELLCNT
+  } yield (start(i) != '.').B))
+  private val golCellsNext = Reg(Vec(GOL_CELLCNT, Bool()))
+
+  private val colReg = RegInit(0.U(unsignedBitLength(LCD_WIDTH - 1).W))
+  private val pagReg = RegInit(0.U(unsignedBitLength(LCD_HEIGHT - 1).W))
+
+  private def cellIxAt(col: UInt, pag: UInt): UInt =
+    col + (pag * GOL_WIDTH.U)
+
+  private def cellValAt(col: UInt, pag: UInt): Bool =
+    golCells(cellIxAt(col, pag))
+
+  private val cellCol = colReg / GOL_SIZE.U
+  private val cellPag = pagReg / GOL_SIZE.U
+
+  private val neighboursAlive = Wire(UInt(unsignedBitLength(8).W))
+  neighboursAlive :=
+    PopCount(
+      Seq(
+        cellValAt(colReg - 1.U, pagReg - 1.U),
+        cellValAt(colReg + 0.U, pagReg - 1.U),
+        cellValAt(colReg + 1.U, pagReg - 1.U),
+        //
+        cellValAt(colReg - 1.U, pagReg + 0.U),
+        cellValAt(colReg + 1.U, pagReg + 0.U),
+        //
+        cellValAt(colReg - 1.U, pagReg + 1.U),
+        cellValAt(colReg + 0.U, pagReg + 1.U),
+        cellValAt(colReg + 1.U, pagReg + 1.U),
+      ),
+    )
 
   switch(state) {
     is(State.sInit) {
@@ -59,20 +110,88 @@ class Top(implicit platform: Platform) extends Module {
       ili.res := initter.io.res
       when(initter.io.done) {
         uart.io.tx.enq(0xff.U)
-        state := State.sWriteImg
+        state := State.sRender
       }
     }
 
-    is(State.sWriteImg) {
-      val data = uart.io.rx.deq()
-      when(uart.io.rx.fire && !uart.io.rx.bits.err) {
-        val req = Wire(new LcdRequest)
-        req.data    := data.byte
-        req.dc      := false.B
-        req.respLen := 0.U
-        lcd.io.req.enq(req)
+    is(State.sRender) {
+      val req = Wire(new LcdRequest)
+      req.data    := Mux(cellValAt(cellCol, cellPag), 0xff.U, 0x00.U)
+      req.dc      := false.B
+      req.respLen := 0.U
+      lcd.io.req.enq(req)
 
-        pngRomOffReg := pngRomOffReg + 1.U
+      when(lcd.io.req.fire) {
+        state := State.sRender2
+      }
+    }
+    is(State.sRender2) {
+      val req = Wire(new LcdRequest)
+      req.data    := Mux(cellValAt(cellCol, cellPag), 0xff.U, 0x00.U)
+      req.dc      := false.B
+      req.respLen := 0.U
+      lcd.io.req.enq(req)
+
+      when(lcd.io.req.fire) {
+        state := State.sRender
+
+        when(colReg === (LCD_WIDTH - 1).U) {
+          colReg := 0.U
+          when(pagReg === (LCD_HEIGHT - 1).U) {
+            pagReg := 0.U
+            state  := State.sWaitPress
+          }.otherwise {
+            pagReg := pagReg + 1.U
+          }
+        }.otherwise {
+          colReg := colReg + 1.U
+        }
+      }
+    }
+
+    is(State.sWaitPress) {
+      // uart.io.rx.deq()
+      // when(uart.io.rx.fire && !uart.io.rx.bits.err) {
+      state := State.sProgress
+      // }
+    }
+
+    is(State.sProgress) {
+      when(golCells(cellIxAt(colReg, pagReg))) {
+        golCellsNext(
+          cellIxAt(colReg, pagReg),
+        ) := (neighboursAlive === 2.U || neighboursAlive === 3.U)
+      }.otherwise {
+        golCellsNext(cellIxAt(colReg, pagReg)) := (neighboursAlive === 3.U)
+      }
+
+      when(colReg === (GOL_WIDTH - 1).U) {
+        colReg := 0.U
+        when(pagReg === (GOL_HEIGHT - 1).U) {
+          pagReg := 0.U
+          state  := State.sTransition
+        }.otherwise {
+          pagReg := pagReg + 1.U
+        }
+      }.otherwise {
+        colReg := colReg + 1.U
+      }
+    }
+
+    is(State.sTransition) {
+      golCells(cellIxAt(colReg, pagReg)) := golCellsNext(
+        cellIxAt(colReg, pagReg),
+      )
+      when(colReg === (GOL_WIDTH - 1).U) {
+        colReg := 0.U
+        when(pagReg === (GOL_HEIGHT - 1).U) {
+          pagReg := 0.U
+          state  := State.sRender
+        }.otherwise {
+          pagReg := pagReg + 1.U
+        }
+      }.otherwise {
+        colReg := colReg + 1.U
       }
     }
   }
@@ -91,7 +210,7 @@ class Top(implicit platform: Platform) extends Module {
 
       plat.resources.pmod2(1).o := plat.resources.uart.rx
 
-      plat.resources.ledg := state === State.sWriteImg
+      plat.resources.ledg := state === State.sRender
 
     case plat: Ulx3SPlatform =>
       ili.cipo := false.B
