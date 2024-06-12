@@ -18,8 +18,11 @@ object App extends ChryseApp {
   override def genTop()(implicit platform: Platform) = new Top
   override val targetPlatforms =
     Seq(
-      new IceBreakerPlatform(ubtnReset = true, inferSpram = true)
-        with PlatformFlashable {
+      new IceBreakerPlatform(
+        ubtnReset = true,
+        inferSpram = true,
+        useHfosc = Some(1),
+      ) with PlatformFlashable {
         var romFlashBase = BigInt("00800000", 16)
         def romFlashCommand(binPath: String) =
           Seq("iceprog", "-o", f"0x$romFlashBase%x", binPath)
