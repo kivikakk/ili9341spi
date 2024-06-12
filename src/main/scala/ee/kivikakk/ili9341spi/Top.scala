@@ -48,8 +48,8 @@ class Top(implicit platform: Platform) extends Module {
     val sInitiate                           = Value
     val sLoad, sLoadWait, sRender, sRender2 = Value
 
-    val sProgressLoad, sProgressWait, sProgressWrite       = Value
-    val sTransitionLoad, sTransitionWait, sTransitionWrite = Value
+    val sProgressLoad, sProgressWait, sProgressPart, sProgressWrite = Value
+    val sTransitionLoad, sTransitionWait, sTransitionWrite          = Value
   }
   private val state = RegInit(State.sInit)
 
@@ -127,6 +127,10 @@ class Top(implicit platform: Platform) extends Module {
 
   private val directCellIx = WireInit(cellIxAt(colReg + 1.U, pagReg + 1.U))
 
+  private val plIxReg            = Reg(UInt(unsignedBitLength(8).W))
+  private val wasAliveReg        = Reg(Bool())
+  private val neighboursAliveReg = Reg(UInt(8.W))
+
   switch(state) {
     is(State.sInit) {
       initter.io.lcd :<>= lcd.io
@@ -197,8 +201,10 @@ class Top(implicit platform: Platform) extends Module {
         when(colReg === (LCD_WIDTH - 1).U) {
           colReg := 0.U
           when(pagReg === (LCD_HEIGHT - 1).U) {
-            pagReg := 0.U
-            state  := State.sProgressLoad
+            pagReg             := 0.U
+            plIxReg            := 0.U
+            neighboursAliveReg := 0.U
+            state              := State.sProgressLoad
           }.otherwise {
             pagReg := pagReg + 1.U
           }
@@ -209,26 +215,63 @@ class Top(implicit platform: Platform) extends Module {
     }
 
     is(State.sProgressLoad) {
-      nowAddr := directCellIx
-      state   := State.sProgressWait
+      when(plIxReg === 0.U)(nowAddr := cellIxAt(colReg + 0.U, pagReg + 0.U))
+        .elsewhen(plIxReg === 1.U)(
+          nowAddr := cellIxAt(colReg + 1.U, pagReg + 0.U),
+        )
+        .elsewhen(plIxReg === 2.U)(
+          nowAddr := cellIxAt(colReg + 2.U, pagReg + 0.U),
+        )
+        .elsewhen(plIxReg === 3.U)(
+          nowAddr := cellIxAt(colReg + 0.U, pagReg + 1.U),
+        )
+        .elsewhen(plIxReg === 4.U)(
+          nowAddr := cellIxAt(colReg + 1.U, pagReg + 1.U),
+        )
+        .elsewhen(plIxReg === 5.U)(
+          nowAddr := cellIxAt(colReg + 2.U, pagReg + 1.U),
+        )
+        .elsewhen(plIxReg === 6.U)(
+          nowAddr := cellIxAt(colReg + 0.U, pagReg + 2.U),
+        )
+        .elsewhen(plIxReg === 7.U)(
+          nowAddr := cellIxAt(colReg + 1.U, pagReg + 2.U),
+        )
+        .elsewhen(plIxReg === 8.U)(
+          nowAddr := cellIxAt(colReg + 2.U, pagReg + 2.U),
+        )
+
+      state := State.sProgressWait
     }
     is(State.sProgressWait) {
-      state := State.sProgressWrite
+      state := State.sProgressPart
+    }
+    is(State.sProgressPart) {
+      when(plIxReg === 4.U) {
+        wasAliveReg := nowReadData
+      }.otherwise {
+        neighboursAliveReg := neighboursAliveReg + nowReadData.asUInt
+      }
+      when(plIxReg =/= 8.U) {
+        plIxReg := plIxReg + 1.U
+        state   := State.sProgressLoad
+      }.otherwise {
+        state := State.sProgressWrite
+      }
     }
     is(State.sProgressWrite) {
-      nextAddr      := directCellIx
-      nextWriteEn   := true.B
-      nextWriteData := nowReadData
+      nextAddr    := directCellIx
+      nextWriteEn := true.B
 
-      // when(golCells(cellIxAt(colReg, pagReg))) {
-      //   golCellsNext(
-      //     cellIxAt(colReg, pagReg),
-      //   ) := (neighboursAlive === 2.U || neighboursAlive === 3.U)
-      // }.otherwise {
-      //   golCellsNext(cellIxAt(colReg, pagReg)) := (neighboursAlive === 3.U)
-      // }
+      when(wasAliveReg) {
+        nextWriteData := (neighboursAliveReg === 2.U || neighboursAliveReg === 3.U)
+      }.otherwise {
+        nextWriteData := (neighboursAliveReg === 3.U)
+      }
 
-      state := State.sProgressLoad
+      plIxReg            := 0.U
+      neighboursAliveReg := 0.U
+      state              := State.sProgressLoad
       when(colReg === (GOL_WIDTH - 1).U) {
         colReg := 0.U
         when(pagReg === (GOL_HEIGHT - 1).U) {
