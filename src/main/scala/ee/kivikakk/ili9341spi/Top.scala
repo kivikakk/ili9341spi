@@ -11,7 +11,7 @@ import ee.kivikakk.ili9341spi.lcd.Lcd
 import ee.kivikakk.ili9341spi.lcd.LcdInit
 import ee.kivikakk.ili9341spi.lcd.LcdRequest
 
-class IliIO extends Bundle {
+private class IliIO extends Bundle {
   val clk  = Output(Bool())
   val copi = Output(Bool())
   val res  = Output(Bool())
@@ -23,12 +23,11 @@ class IliIO extends Bundle {
 class Top(implicit platform: Platform) extends Module {
   override def desiredName = "ili9341spi"
 
-  val ili    = Wire(new IliIO)
-  val resReg = RegInit(true.B) // start with reset on.
-  ili.res := resReg
+  private val ili = Wire(new IliIO)
+  ili.res := false.B
   ili.blk := true.B
 
-  val lcd = Module(new Lcd)
+  private val lcd = Module(new Lcd)
   ili.clk       := lcd.pins.clk
   ili.copi      := lcd.pins.copi
   ili.dc        := lcd.pins.dc
@@ -37,82 +36,27 @@ class Top(implicit platform: Platform) extends Module {
   lcd.io.req.noenq()
   lcd.io.resp.nodeq()
 
-  val uart = Module(new Uart(baud = 115200))
+  private val uart = Module(new Uart(baud = 115200))
   uart.io.rx.nodeq()
   uart.io.tx :<>= lcd.io.resp
 
   object State extends ChiselEnum {
-    val sResetApply, sResetWait, sInitCmd, sInitParam, sWriteImg = Value
+    val sInit, sWriteImg = Value
   }
-  val state         = RegInit(State.sResetApply)
-  val resetApplyCyc = 11 * platform.clockHz / 1_000_000      // tRW_min = 10µs
-  val resetWaitCyc  = 121_000 * platform.clockHz / 1_000_000 // tRT_max = 120ms
-  val resTimerReg   = RegInit(resetApplyCyc.U(unsignedBitLength(resetWaitCyc).W))
-  val initRomLen    = LcdInit.rom.length
-  val initRomIxReg  = RegInit(0.U(unsignedBitLength(initRomLen).W))
-  val initCmdRemReg = Reg(
-    UInt(unsignedBitLength(LcdInit.sequence.map(_._2.length).max).W),
-  )
-  val pngRomLen    = LcdInit.pngrom.length
-  val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
-  // We spend quite a few cells on this. TODO (Chryse): BRAM init.
-  // Cbf putting every tiny initted memory on SPI flash.
-  val initRom = VecInit(LcdInit.rom)
+  private val state = RegInit(State.sInit)
+
+  private val initter = Module(new Initter)
+  initter.io.lcd <> DontCare
+
+  private val pngRomLen    = LcdInit.pngrom.length
+  private val pngRomOffReg = Reg(UInt(unsignedBitLength(pngRomLen).W))
 
   switch(state) {
-    is(State.sResetApply) {
-      resTimerReg := resTimerReg - 1.U
-      when(resTimerReg === 0.U) {
-        resReg      := false.B
-        resTimerReg := resetWaitCyc.U
-        state       := State.sResetWait
-      }
-    }
-    is(State.sResetWait) {
-      resTimerReg := resTimerReg - 1.U
-      when(resTimerReg === 0.U) {
-        state := State.sInitCmd
-      }
-    }
-    is(State.sInitCmd) {
-      when(initRomIxReg =/= initRomLen.U) {
-        val req = Wire(new LcdRequest())
-        req.data    := initRom(initRomIxReg)
-        req.dc      := true.B
-        req.respLen := 0.U
-        lcd.io.req.enq(req)
-
-        when(lcd.io.req.fire) {
-          initRomIxReg  := initRomIxReg + 2.U
-          initCmdRemReg := initRom(initRomIxReg + 1.U)
-
-          state := State.sInitParam
-
-          when(initRom(initRomIxReg) === 0.U) {
-            resTimerReg := resetWaitCyc.U
-            state       := State.sResetWait
-          }
-        }
-      }.otherwise {
-        state        := State.sWriteImg
-        pngRomOffReg := 0.U
-      }
-    }
-    is(State.sInitParam) {
-      when(initCmdRemReg =/= 0.U) {
-        val req = Wire(new LcdRequest)
-        req.data    := initRom(initRomIxReg)
-        req.dc      := false.B
-        req.respLen := 0.U
-        lcd.io.req.enq(req)
-
-        when(lcd.io.req.fire) {
-          initRomIxReg  := initRomIxReg + 1.U
-          initCmdRemReg := initCmdRemReg - 1.U
-        }
-      }.otherwise {
-        uart.io.tx.enq(0xff.U)
-        state := State.sInitCmd
+    is(State.sInit) {
+      initter.io.lcd :<>= lcd.io
+      ili.res := initter.io.res
+      when(initter.io.done) {
+        state := State.sWriteImg
       }
     }
 
@@ -155,9 +99,6 @@ class Top(implicit platform: Platform) extends Module {
     case plat: CxxrtlPlatform =>
       val bb = IO(new IliIO)
       bb :<>= ili
-
-      // val bb = IO(Flipped(new IliIO))
-      // ili :<>= bb
 
       val uart_rx = IO(Input(Bool()))
       uart.pins.rx := uart_rx
