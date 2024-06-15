@@ -6,6 +6,7 @@ from amaranth.lib.wiring import In, Out
 from amaranth_stdio.serial import AsyncSerial
 
 from ..targets import cxxrtl, icebreaker, ulx3s
+from . import streamext as _
 from .lcd import Lcd
 
 __all__ = ["Top"]

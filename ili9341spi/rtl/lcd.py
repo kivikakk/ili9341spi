@@ -1,5 +1,5 @@
 from amaranth import Cat, Module, Signal
-from amaranth.lib import data, stream, wiring
+from amaranth.lib import data, stream, wiring  # type: ignore
 from amaranth.lib.wiring import In, Out
 
 __all__ = ["Lcd"]
@@ -40,16 +40,12 @@ class Lcd(wiring.Component):
             m.d.sync += sr.eq(Cat(self.pins.cipo, sr[:7]))
         m.d.comb += self.pins.copi.eq(sr[7])
 
-        self.command.req.nodeq(m)
-        self.command.resp.noenq(m)
-
         bit_rem = Signal(3)
         rcv_byte_rem = Signal(4)
 
         with m.FSM():
             with m.State("idle"):
-                payload = self.command.req.deq(m)
-                with m.If(self.command.req.fire):
+                with self.command.req.Deq(m) as payload:
                     m.d.sync += [
                         sr.eq(payload.data),
                         self.pins.dc.eq(payload.dc),
@@ -90,7 +86,8 @@ class Lcd(wiring.Component):
                     m.next = "rcv_done"
 
             with m.State("rcv_done"):
-                # no backpressure, oops.
+                # XXX no support for backpressure, probably violates `stream`
+                # policy.
                 self.command.resp.enq(m, sr)
                 m.d.sync += rcv_byte_rem.eq(rcv_byte_rem - 1)
 
