@@ -1,0 +1,17 @@
+[project]
+name = "ili9341spi"
+version = "0.0"
+description = ""
+authors = [{ name = "Asherah Connor", email = "ashe@kivikakk.ee" }]
+dependencies = [
+    "amaranth >= 0.5, < 0.7",
+    "amaranth-boards",
+    "amaranth-stdio",
+    "niar >= 0.1",
+]
+requires-python = ">=3.8"
+license = { text = "BSD-2-Clause" }
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

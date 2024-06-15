@@ -1,6 +1,12 @@
 {
-    "files.watcherExclude": {
-        "**/target": true
-    },
     "editor.formatOnSave": true,
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportGeneralTypeIssues": "none"
+    }
 }
