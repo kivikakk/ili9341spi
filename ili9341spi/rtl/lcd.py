@@ -45,7 +45,7 @@ class Lcd(wiring.Component):
 
         with m.FSM():
             with m.State("idle"):
-                with self.command.req.Deq(m) as payload:
+                with self.command.req.Recv(m) as payload:
                     m.d.sync += [
                         sr.eq(payload.data),
                         self.pins.dc.eq(payload.dc),

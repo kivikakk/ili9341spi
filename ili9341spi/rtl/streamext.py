@@ -13,7 +13,7 @@ class InterfaceExtensions:
         return self.valid & self.ready
 
     @contextlib.contextmanager
-    def Deq(self, m):
+    def Recv(self, m):
         payload = self.deq(m)
         with m.If(self.fire):
             yield payload
@@ -23,6 +23,12 @@ class InterfaceExtensions:
             self.valid.eq(1),
             self.payload.eq(payload),
         ]
+
+    @contextlib.contextmanager
+    def Send(self, m, payload):
+        payload = self.enq(m, payload)
+        with m.If(self.fire):
+            yield
 
 
 for k, v in vars(InterfaceExtensions).items():
