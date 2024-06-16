@@ -104,7 +104,7 @@ class Top(wiring.Component):
             "\n", ""
         )
 
-        now_cells = Memory(shape=1, depth=GOL_CELLCNT, init=[c != "." for c in start])
+        m.submodules.now_cells = now_cells = Memory(shape=1, depth=GOL_CELLCNT, init=[c != "." for c in start])
         now_cells_rd = now_cells.read_port()
         now_cells_wr = now_cells.write_port()
         now_cells_addr = Signal.like(now_cells_rd.addr)
@@ -113,7 +113,7 @@ class Top(wiring.Component):
             now_cells_wr.addr.eq(now_cells_addr),
         ]
 
-        next_cells = Memory(shape=1, depth=GOL_CELLCNT, init=[])
+        m.submodules.next_cells = next_cells = Memory(shape=1, depth=GOL_CELLCNT, init=[])
         next_cells_rd = next_cells.read_port()
         next_cells_wr = next_cells.write_port()
         next_cells_addr = Signal.like(next_cells_rd.addr)
