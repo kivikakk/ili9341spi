@@ -1,5 +1,9 @@
 # ili9341spi
 
+Proving ground for [Niar].
+
+[Niar]: https://github.com/kivikakk/niar
+
 So far so good:
 
 ![photo showing Conway's Game of Life shown on a 320x240 TFT LCD](doc/tftlcd.jpg)
