@@ -8,8 +8,8 @@
             .hash = "1220b9707cae5f66bbf8979c128092e31fe5ff5e24369f536dcf4eb82eff6071488f",
         },
         .zxxrtl = .{
-            .url = "https://github.com/kivikakk/zxxrtl/archive/5c7849b7e37a66da51226a6f3a9ca0c482bb8882.tar.gz",
-            .hash = "12205dea2dc306810b4db974c0476fcd3f71e40f5c35bfe3de747e4bb3f9c9c07a54",
+            .url = "https://github.com/kivikakk/zxxrtl/archive/b56e2ee4c871aa0ef71abff5b444849a6f4ce519.tar.gz",
+            .hash = "122087a8c0269771ac81686992fe34956ea40ab8870de2d4e8150f92329af1b25a00",
         },
     },
     .paths = .{
