@@ -1,5 +1,6 @@
 const std = @import("std");
 const SDL = @import("SDL.zig");
+const zxxrtl = @import("zxxrtl");
 
 pub fn build(b: *std.Build) void {
     const yosys_data_dir = b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)") orelse guessYosysDataDir(b);
@@ -22,12 +23,14 @@ pub fn build(b: *std.Build) void {
     sdlsdk.link(exe, .dynamic);
     exe.root_module.addImport("sdl2", sdlsdk.getWrapperModule());
 
+    const zxxrtl_mod = b.dependency("zxxrtl", .{ .target = target, .optimize = optimize }).module("zxxrtl");
+    zxxrtl_mod.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include/backends/cxxrtl/runtime", .{yosys_data_dir}) });
+    exe.root_module.addImport("zxxrtl", zxxrtl_mod);
+
     var it = std.mem.split(u8, cxxrtl_o_paths, ",");
     while (it.next()) |cxxrtl_o_path| {
         exe.addObjectFile(b.path(cxxrtl_o_path));
     }
-
-    exe.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include/backends/cxxrtl/runtime", .{yosys_data_dir}) });
 
     const options = b.addOptions();
     options.addOption(usize, "clock_hz", clock_hz);

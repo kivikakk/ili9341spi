@@ -1,39 +1,20 @@
 .{
-    // This is the default name used by packages depending on this one. For
-    // example, when a user runs `zig fetch --save <url>`, this field is used
-    // as the key in the `dependencies` table. Although the user can choose a
-    // different name, most users will stick with this provided value.
-    //
-    // It is redundant to include "zig" in this name because it is already
-    // within the Zig package namespace.
     .name = "cxxrtl",
-
-    // This is a [Semantic Version](https://semver.org/).
-    // In a future version of Zig it will be used for package deduplication.
     .version = "0.0.0",
 
-    // This field is optional.
-    // This is currently advisory only; Zig does not yet do anything
-    // with this value.
-    //.minimum_zig_version = "0.11.0",
-
-    // This field is optional.
-    // Each dependency must either provide a `url` and `hash`, or a `path`.
-    // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
-    // Once all dependencies are fetched, `zig build` no longer requires
-    // internet connectivity.
     .dependencies = .{
         .@"SDL.zig" = .{
             .url = "https://github.com/kivikakk/SDL.zig/archive/9d18b804dbf0bafd5191c5309110c4f479a35998.tar.gz",
             .hash = "1220b9707cae5f66bbf8979c128092e31fe5ff5e24369f536dcf4eb82eff6071488f",
+        },
+        .zxxrtl = .{
+            .url = "https://github.com/kivikakk/zxxrtl/archive/5c7849b7e37a66da51226a6f3a9ca0c482bb8882.tar.gz",
+            .hash = "12205dea2dc306810b4db974c0476fcd3f71e40f5c35bfe3de747e4bb3f9c9c07a54",
         },
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
-        // For example...
-        //"LICENSE",
-        //"README.md",
     },
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
+const Cxxrtl = @import("zxxrtl");
 
-const Cxxrtl = @import("./Cxxrtl.zig");
 const SimController = @import("./SimController.zig");
 const SpiConnector = @import("./SpiConnector.zig");
 
