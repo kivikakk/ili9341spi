@@ -3,8 +3,8 @@ const SDL = @import("SDL.zig");
 
 pub fn build(b: *std.Build) void {
     const yosys_data_dir = b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)") orelse @import("zxxrtl").guessYosysDataDir(b);
-    const cxxrtl_o_paths = b.option([]const u8, "cxxrtl_o_paths", "comma-separated paths to .o files to link against, including CXXRTL simulation") orelse
-        "../build/cxxrtl/ili9341spi.o";
+    const cxxrtl_o_paths = b.option([][]const u8, "cxxrtl_o_path", "path to .o file to link against") orelse
+        &[_][]const u8{"../build/cxxrtl/ili9341spi.o"};
     const clock_hz = b.option(usize, "clock_hz", "clock speed the gateware is elaborated at in Hz") orelse 1_000_000;
 
     const target = b.standardTargetOptions(.{});
@@ -29,8 +29,7 @@ pub fn build(b: *std.Build) void {
     }).module("zxxrtl");
     exe.root_module.addImport("zxxrtl", zxxrtl_mod);
 
-    var it = std.mem.split(u8, cxxrtl_o_paths, ",");
-    while (it.next()) |cxxrtl_o_path| {
+    for (cxxrtl_o_paths) |cxxrtl_o_path| {
         exe.addObjectFile(b.path(cxxrtl_o_path));
     }
 
