@@ -12,49 +12,16 @@ permissions:
 jobs:
   cxxrtl-build:
     runs-on: ubuntu-latest
-    steps:
+    steps:  
+    - uses: kivikakk/niar/setup-action@main
+      with:
+        install-zig: '0.13.0'
+
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: pip
-
     - name: Install pip dependencies
       run: pip install --editable .
-
-    - name: Checkout niar
-      uses: actions/checkout@v4
-      with:
-        repository: kivikakk/niar
-        path: vendor/niar
-
-    - name: Install niar
-      run: cd vendor/niar && pip install .
-
-    - name: Checkout amaranth-stdio
-      uses: actions/checkout@v4
-      with:
-        repository: amaranth-lang/amaranth-stdio
-        path: vendor/amaranth-stdio
-
-    - name: Install amaranth-stdio
-      run: cd vendor/amaranth-stdio && pip install .
-
-    - name: Checkout amaranth-boards
-      uses: actions/checkout@v4
-      with:
-        repository: amaranth-lang/amaranth-boards
-        path: vendor/amaranth-boards
-
-    - name: Install amaranth-boards
-      run: cd vendor/amaranth-boards && pip install .
-
-    - name: Install Zig
-      uses: goto-bus-stop/setup-zig@v2
-      with:
-        version: '0.13.0'
 
     - name: Install SDL
       run: sudo apt-get install -y libsdl2-dev
