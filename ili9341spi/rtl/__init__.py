@@ -1,6 +1,6 @@
 from amaranth import ClockSignal, Module, Mux, Signal
 from amaranth.build import Attrs, Pins, PinsN, Resource, Subsignal
-from amaranth.lib import wiring
+from amaranth.lib import io, wiring
 from amaranth.lib.cdc import FFSynchronizer
 from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import In, Out
@@ -17,11 +17,11 @@ __all__ = ["Top"]
 
 
 icebreaker_spi_lcd = Resource("spi_lcd", 0,
-    Subsignal("clk",  Pins("3", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
-    Subsignal("copi", Pins("4", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("clk",  Pins("3",  dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("copi", Pins("4",  dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
     Subsignal("res",  PinsN("7", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
     Subsignal("dc",   PinsN("8", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
-    Subsignal("blk",  Pins("9", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("blk",  Pins("9",  dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
     Subsignal("cipo", Pins("10", dir="i", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
 )
 
@@ -51,9 +51,9 @@ class Top(wiring.Component):
         ili = wiring.flipped(Lcd.PinSignature.create())
 
         m.submodules.lcd = lcd = Lcd()
-        wiring.connect(m, lcd.pins, ili)
+        wiring.connect(m, lcd.pin, ili)
 
-        with lcd.command.resp.Recv(m) as payload:
+        with lcd.cmd.resp.Recv(m) as payload:
             m.d.comb += [
                 serial.tx.data.eq(payload),
                 serial.tx.ack.eq(1),
@@ -147,7 +147,7 @@ class Top(wiring.Component):
 
         with m.FSM():
             with m.State("init"):
-                wiring.connect(m, wiring.flipped(initter.lcd), lcd.command)
+                wiring.connect(m, wiring.flipped(initter.lcd), lcd.cmd)
                 m.d.comb += res.eq(initter.res)
                 with m.If(initter.done):
                     m.next = "initiate"
@@ -157,7 +157,7 @@ class Top(wiring.Component):
                     req.data.eq(LcdCommand.MEMORY_WRITE),
                     req.dc.eq(1),
                 ]
-                with lcd.command.req.Send(m, req):
+                with lcd.cmd.req.Send(m, req):
                     m.next = "load"
 
             ## render
@@ -174,7 +174,7 @@ class Top(wiring.Component):
                     req.data.eq(Mux(now_cells_rd.data, 0xff, 0x00)),
                     req.dc.eq(0),
                 ]
-                with lcd.command.req.Send(m, req):
+                with lcd.cmd.req.Send(m, req):
                     m.next = "render2"
 
             with m.State("render2"):
@@ -182,7 +182,7 @@ class Top(wiring.Component):
                     req.data.eq(Mux(now_cells_rd.data, 0xff, 0x00)),
                     req.dc.eq(0),
                 ]
-                with lcd.command.req.Send(m, req):
+                with lcd.cmd.req.Send(m, req):
                     m.next = "load"
 
                     with m.If(col == LCD_WIDTH - 1):
@@ -280,15 +280,30 @@ class Top(wiring.Component):
         match platform:
             case icebreaker():
                 platform.add_resources([icebreaker_spi_lcd])
-                plat_spi = platform.request("spi_lcd")
+                plat_spi = platform.request("spi_lcd", dir={
+                    "clk": "-",
+                    "copi": "-",
+                    "dc": "-",
+                    "cipo": "-",
+                })
                 m.d.comb += [
-                    plat_spi.clk.o.eq(ili.clk),
-                    plat_spi.copi.o.eq(ili.copi),
                     plat_spi.res.o.eq(res),
-                    plat_spi.dc.o.eq(ili.dc),
                     plat_spi.blk.o.eq(blk),
-                    ili.cipo.eq(plat_spi.cipo.i),
                 ]
+                m.submodules.ddr_clk = ddr_clk = io.DDRBuffer("o", plat_spi.clk)
+                m.d.comb += [
+                    ddr_clk.o[0].eq(0),
+                    ddr_clk.o[1].eq(ili.clk),
+                ]
+
+                m.submodules.ff_copi = ff_copi = io.FFBuffer("o", plat_spi.copi)
+                m.d.comb += ff_copi.o.eq(ili.copi)
+
+                m.submodules.ff_dc = ff_dc = io.FFBuffer("o", plat_spi.dc)
+                m.d.comb += ff_dc.o.eq(ili.dc)
+
+                m.submodules.ff_cipo = ff_cipo = io.FFBuffer("i", plat_spi.cipo)
+                m.d.comb += ili.cipo.eq(ff_cipo.i)
 
                 platform.add_resources([Resource("pmod_clk_out", 0,
                     Subsignal("clk", Pins("1", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
