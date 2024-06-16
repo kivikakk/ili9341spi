@@ -2,7 +2,7 @@ const std = @import("std");
 const SDL = @import("SDL.zig");
 
 pub fn build(b: *std.Build) void {
-    const yosys_data_dir = b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)") orelse guessYosysDataDir(b);
+    const yosys_data_dir = b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)") orelse @import("zxxrtl").guessYosysDataDir(b);
     const cxxrtl_o_paths = b.option([]const u8, "cxxrtl_o_paths", "comma-separated paths to .o files to link against, including CXXRTL simulation") orelse
         "../build/cxxrtl/ili9341spi.o";
     const clock_hz = b.option(usize, "clock_hz", "clock speed the gateware is elaborated at in Hz") orelse 1_000_000;
@@ -22,12 +22,17 @@ pub fn build(b: *std.Build) void {
     sdlsdk.link(exe, .dynamic);
     exe.root_module.addImport("sdl2", sdlsdk.getWrapperModule());
 
+    const zxxrtl_mod = b.dependency("zxxrtl", .{
+        .target = target,
+        .optimize = optimize,
+        .yosys_data_dir = yosys_data_dir,
+    }).module("zxxrtl");
+    exe.root_module.addImport("zxxrtl", zxxrtl_mod);
+
     var it = std.mem.split(u8, cxxrtl_o_paths, ",");
     while (it.next()) |cxxrtl_o_path| {
         exe.addObjectFile(b.path(cxxrtl_o_path));
     }
-
-    exe.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include/backends/cxxrtl/runtime", .{yosys_data_dir}) });
 
     const options = b.addOptions();
     options.addOption(usize, "clock_hz", clock_hz);
@@ -43,13 +48,4 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-}
-
-fn guessYosysDataDir(b: *std.Build) []const u8 {
-    const result = std.process.Child.run(.{
-        .allocator = b.allocator,
-        .argv = &.{ "yosys-config", "--datdir" },
-        .expand_arg0 = .expand,
-    }) catch @panic("couldn't run yosys-config; please supply -Dyosys_data_dir");
-    return std.mem.trim(u8, result.stdout, "\n");
 }

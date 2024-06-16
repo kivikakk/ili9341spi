@@ -1,6 +1,5 @@
 const std = @import("std");
-
-const Cxxrtl = @import("./Cxxrtl.zig");
+const Cxxrtl = @import("zxxrtl");
 
 const SpiConnector = @This();
 

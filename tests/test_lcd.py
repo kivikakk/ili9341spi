@@ -16,58 +16,53 @@ class TestLcd(unittest.TestCase):
     async def _snd(ctx, dut, bytes, rcv_cnt=0):
         for byte_ix, byte in enumerate(bytes):
             await ctx.tick()
-            assert ctx.get(dut.pins.clk) == 0, f"snd pins.clk @ {byte_ix}"
-            assert ctx.get(dut.command.req.ready) == 1
+            assert ctx.get(dut.cmd.req.ready) == 1
 
-            ctx.set(dut.command.req.payload.data, byte)
-            ctx.set(dut.command.req.payload.dc, byte_ix == 0)
+            ctx.set(dut.cmd.req.payload.data, byte)
+            ctx.set(dut.cmd.req.payload.dc, byte_ix == 0)
             ctx.set(
-                dut.command.req.payload.resp_len,
+                dut.cmd.req.payload.resp_len,
                 rcv_cnt if byte_ix == len(bytes) - 1 else 0,
             )
-            ctx.set(dut.command.req.valid, 1)
+            ctx.set(dut.cmd.req.valid, 1)
 
             for bit_ix in range(8):
                 await ctx.tick()
-                assert ctx.get(dut.command.req.ready) == 0
-                assert ctx.get(dut.pins.clk) == 0
+                assert ctx.get(dut.cmd.req.ready) == 0
 
-                ctx.set(dut.command.req.valid, 0)
+                ctx.set(dut.cmd.req.valid, 0)
 
-                await ctx.tick()
-                assert ctx.get(dut.pins.clk) == 1
-                assert ctx.get(dut.pins.copi) == (
+                assert ctx.get(dut.pin.copi) == (
                     (byte >> (7 - bit_ix)) & 1
                 ), f"snd pins.copi @ {byte_ix}:{bit_ix}"
                 if bit_ix == 7:
-                    assert ctx.get(dut.pins.dc) == (
+                    assert ctx.get(dut.pin.dc) == (
                         byte_ix == 0
                     ), f"snd pins.dc @ {byte_ix}"
 
         await ctx.tick()
-        assert ctx.get(dut.pins.clk) == 0
-        assert ctx.get(dut.command.req.ready) == (rcv_cnt == 0)
+        assert ctx.get(dut.pin.clk) == 0
+        assert ctx.get(dut.cmd.req.ready) == (rcv_cnt == 0)
 
     @staticmethod
     async def _rcv(ctx, dut, bytes):
         for byte_ix, byte in enumerate(bytes):
             for bit_ix in range(8):
-                assert ctx.get(dut.pins.clk) == 0, f"rcv pins.clk @ {byte_ix}:{bit_ix}"
+                assert ctx.get(dut.pin.clk) == 0, f"rcv pins.clk @ {byte_ix}:{bit_ix}"
                 assert ctx.get(
-                    dut.command.req.ready == 0
+                    dut.cmd.req.ready == 0
                 ), f"rcv req.ready @ {byte_ix}:{bit_ix}"
 
-                ctx.set(dut.pins.cipo, (byte >> (7 - bit_ix)) & 1)
-
-                await ctx.tick()
-                assert ctx.get(dut.pins.clk) == 1
+                ctx.set(dut.pin.cipo, (byte >> (7 - bit_ix)) & 1)
 
                 await ctx.tick()
 
-            assert ctx.get(dut.command.resp.valid) == 1, f"rcv resp.valid @ {byte_ix}"
+            assert ctx.get(dut.cmd.resp.valid) == 1, f"rcv resp.valid @ {byte_ix}"
             assert (
-                ctx.get(dut.command.resp.payload) == byte
+                ctx.get(dut.cmd.resp.payload) == byte
             ), f"rcv resp.payload @ {byte_ix}"
+
+            await ctx.tick()
 
     @staticmethod
     def _run(tb_with_dut):

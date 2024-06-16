@@ -1,6 +1,6 @@
 from amaranth import Array, Module, Signal
 from amaranth.lib import wiring
-from amaranth.lib.wiring import In, Out
+from amaranth.lib.wiring import Out
 
 from .lcd import Lcd
 from .proto import LCD_INIT_ROM, LCD_INIT_SEQUENCE, LcdCommand
@@ -9,7 +9,7 @@ __all__ = ["Initter"]
 
 
 class Initter(wiring.Component):
-    lcd: Out(Lcd.CommandSignature)
+    lcd: Out(Lcd.CmdSignature)
     res: Out(1)
     done: Out(1)
 
