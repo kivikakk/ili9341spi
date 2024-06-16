@@ -16,12 +16,12 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
+    - name: Install pip dependencies
+      run: pip install --editable .
+
     - uses: kivikakk/niar/setup-action@main
       with:
         install-zig: '0.13.0'
-
-    - name: Install pip dependencies
-      run: pip install --editable .
 
     - name: Install SDL
       run: sudo apt-get install -y libsdl2-dev
