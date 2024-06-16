@@ -18,8 +18,8 @@ alloc: std.mem.Allocator,
 cxxrtl: Cxxrtl,
 vcd: ?Cxxrtl.Vcd,
 
-clock: Cxxrtl.Object(bool),
-reset: Cxxrtl.Object(bool),
+clk: Cxxrtl.Object(bool),
+rst: Cxxrtl.Object(bool),
 
 spi_connector: SpiConnector,
 uart_connector: UartConnector,
@@ -33,8 +33,8 @@ pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread 
     var vcd: ?Cxxrtl.Vcd = null;
     if (sim_controller.vcd_out != null) vcd = Cxxrtl.Vcd.init(cxxrtl);
 
-    const clock = cxxrtl.get(bool, "clock");
-    const reset = cxxrtl.get(bool, "reset");
+    const clk = cxxrtl.get(bool, "clk");
+    const rst = cxxrtl.get(bool, "rst");
 
     const spi_connector = SpiConnector.init(cxxrtl);
     const uart_connector = UartConnector.init(cxxrtl, @embedFile("rom.bin"));
@@ -44,8 +44,8 @@ pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread 
         .alloc = alloc,
         .cxxrtl = cxxrtl,
         .vcd = vcd,
-        .clock = clock,
-        .reset = reset,
+        .clk = clk,
+        .rst = rst,
         .spi_connector = spi_connector,
         .uart_connector = uart_connector,
     };
@@ -58,9 +58,9 @@ pub fn deinit(self: *SimThread) void {
 
 pub fn run(self: *SimThread) !void {
     self.sim_controller.lock();
-    self.reset.next(true);
+    self.rst.next(true);
     self.cycle();
-    self.reset.next(false);
+    self.rst.next(false);
     self.sim_controller.unlock();
 
     // XXX: We handle barely any of MADCTL, so this is incredibly specific to
@@ -179,11 +179,11 @@ pub fn run(self: *SimThread) !void {
 }
 
 fn cycle(self: *SimThread) void {
-    self.clock.next(false);
+    self.clk.next(false);
     self.cxxrtl.step();
     if (self.vcd) |*vcd| vcd.sample();
 
-    self.clock.next(true);
+    self.clk.next(true);
     self.cxxrtl.step();
     if (self.vcd) |*vcd| vcd.sample();
 

@@ -5,7 +5,6 @@ const Cxxrtl = @import("./Cxxrtl.zig");
 const SpiConnector = @This();
 
 cipo: Cxxrtl.Object(bool),
-blk: Cxxrtl.Sample(bool),
 dc: Cxxrtl.Sample(bool),
 res: Cxxrtl.Sample(bool),
 copi: Cxxrtl.Sample(bool),
@@ -21,16 +20,14 @@ const Tick = union(enum) {
 };
 
 pub fn init(cxxrtl: Cxxrtl) SpiConnector {
-    const cipo = cxxrtl.get(bool, "spi_cipo");
-    const blk = Cxxrtl.Sample(bool).init(cxxrtl, "spi_blk", false);
-    const dc = Cxxrtl.Sample(bool).init(cxxrtl, "spi_dc", false);
-    const res = Cxxrtl.Sample(bool).init(cxxrtl, "spi_res", false);
-    const copi = Cxxrtl.Sample(bool).init(cxxrtl, "spi_copi", false);
-    const clk = Cxxrtl.Sample(bool).init(cxxrtl, "spi_clk", false);
+    const cipo = cxxrtl.get(bool, "lcd__cipo");
+    const dc = Cxxrtl.Sample(bool).init(cxxrtl, "lcd__dc", false);
+    const res = Cxxrtl.Sample(bool).init(cxxrtl, "lcd_res", false);
+    const copi = Cxxrtl.Sample(bool).init(cxxrtl, "lcd__copi", false);
+    const clk = Cxxrtl.Sample(bool).init(cxxrtl, "lcd__clk", false);
 
     return .{
         .cipo = cipo,
-        .blk = blk,
         .dc = dc,
         .res = res,
         .copi = copi,

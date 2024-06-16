@@ -15,3 +15,4 @@ class ulx3s(ULX3S_45F_Platform):
 
 class cxxrtl(niar.CxxrtlPlatform):
     default_clk_frequency = 1_000_000.0
+    uses_zig = True

@@ -235,7 +235,7 @@ class Top(wiring.Component):
             case cxxrtl():
                 m.d.comb += self.uart_tx.eq(serial.tx.o)
                 m.d.comb += serial.rx.i.eq(self.uart_rx)
-                wiring.connect(m, self.lcd, ili)
+                wiring.connect(m, wiring.flipped(self.lcd), wiring.flipped(ili))
                 m.d.comb += self.lcd_res.eq(res)
 
         return m

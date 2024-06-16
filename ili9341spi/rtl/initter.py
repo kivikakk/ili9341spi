@@ -48,7 +48,6 @@ class Initter(wiring.Component):
                     m.d.comb += [
                         req.data.eq(rom[rom_ix]),
                         req.dc.eq(1),
-                        req.resp_len.eq(0),
                     ]
                     with self.lcd.req.Send(m, req):
                         m.d.sync += [
@@ -69,7 +68,6 @@ class Initter(wiring.Component):
                     m.d.comb += [
                         req.data.eq(rom[rom_ix]),
                         req.dc.eq(0),
-                        req.resp_len.eq(0),
                     ]
                     with self.lcd.req.Send(m, req):
                         m.d.sync += [
