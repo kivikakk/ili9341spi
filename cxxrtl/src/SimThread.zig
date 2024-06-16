@@ -3,7 +3,6 @@ const std = @import("std");
 const Cxxrtl = @import("./Cxxrtl.zig");
 const SimController = @import("./SimController.zig");
 const SpiConnector = @import("./SpiConnector.zig");
-const UartConnector = @import("./UartConnector.zig");
 
 const SimThread = @This();
 
@@ -22,7 +21,6 @@ clk: Cxxrtl.Object(bool),
 rst: Cxxrtl.Object(bool),
 
 spi_connector: SpiConnector,
-uart_connector: UartConnector,
 
 img_data: ImgData = [_]Color{.{ .r = 0, .g = 0, .b = 0 }} ** (HEIGHT * WIDTH),
 img_data_new: bool = true,
@@ -37,7 +35,6 @@ pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread 
     const rst = cxxrtl.get(bool, "rst");
 
     const spi_connector = SpiConnector.init(cxxrtl);
-    const uart_connector = UartConnector.init(cxxrtl, @embedFile("rom.bin"));
 
     return .{
         .sim_controller = sim_controller,
@@ -47,7 +44,6 @@ pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread 
         .clk = clk,
         .rst = rst,
         .spi_connector = spi_connector,
-        .uart_connector = uart_connector,
     };
 }
 
@@ -105,7 +101,6 @@ pub fn run(self: *SimThread) !void {
                     state = .MemoryWriteA;
                     col = sc;
                     pag = sp;
-                    self.uart_connector.go();
                 } else {
                     state = .Idle;
                 }

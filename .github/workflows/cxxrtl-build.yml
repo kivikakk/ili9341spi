@@ -12,7 +12,7 @@ permissions:
 jobs:
   cxxrtl-build:
     runs-on: ubuntu-latest
-    steps:  
+    steps:
     - uses: kivikakk/niar/setup-action@main
       with:
         install-zig: '0.13.0'
