@@ -1,4 +1,4 @@
-name: cxxrtl build
+name: CXXRTL build
 
 on:
   push:
@@ -11,22 +11,20 @@ permissions:
 
 jobs:
   cxxrtl-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Set up Chryse
-      uses: chryse-hdl/setup-chryse@v2
+    - name: Install pip dependencies
+      run: pip install --editable .
+
+    - uses: kivikakk/niar/setup-action@main
       with:
-        source-ref: main
-        athena-source-ref: main
-        install-oss-cad-suite: true
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        install-zig: 0.13.0
+        install-zig: '0.13.0'
 
     - name: Install SDL
       run: sudo apt-get install -y libsdl2-dev
 
     - name: Elaborate and compile cxxrtl
-      run: sbt 'run cxxrtl -c'
+      run: python -m ili9341spi cxxrtl -c

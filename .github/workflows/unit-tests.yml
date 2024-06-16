@@ -11,16 +11,15 @@ permissions:
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Set up Chryse
-      uses: chryse-hdl/setup-chryse@v2
-      with:
-        source-ref: main
-        athena-source-ref: main
+    - name: Install pip dependencies
+      run: pip install --editable .
+
+    - uses: kivikakk/niar/setup-action@main
 
     - name: Run tests
-      run: sbt test
+      run: pytest tests

@@ -3,7 +3,6 @@ const std = @import("std");
 const Cxxrtl = @import("./Cxxrtl.zig");
 const SimController = @import("./SimController.zig");
 const SpiConnector = @import("./SpiConnector.zig");
-const UartConnector = @import("./UartConnector.zig");
 
 const SimThread = @This();
 
@@ -18,11 +17,10 @@ alloc: std.mem.Allocator,
 cxxrtl: Cxxrtl,
 vcd: ?Cxxrtl.Vcd,
 
-clock: Cxxrtl.Object(bool),
-reset: Cxxrtl.Object(bool),
+clk: Cxxrtl.Object(bool),
+rst: Cxxrtl.Object(bool),
 
 spi_connector: SpiConnector,
-uart_connector: UartConnector,
 
 img_data: ImgData = [_]Color{.{ .r = 0, .g = 0, .b = 0 }} ** (HEIGHT * WIDTH),
 img_data_new: bool = true,
@@ -33,21 +31,19 @@ pub fn init(alloc: std.mem.Allocator, sim_controller: *SimController) SimThread 
     var vcd: ?Cxxrtl.Vcd = null;
     if (sim_controller.vcd_out != null) vcd = Cxxrtl.Vcd.init(cxxrtl);
 
-    const clock = cxxrtl.get(bool, "clock");
-    const reset = cxxrtl.get(bool, "reset");
+    const clk = cxxrtl.get(bool, "clk");
+    const rst = cxxrtl.get(bool, "rst");
 
     const spi_connector = SpiConnector.init(cxxrtl);
-    const uart_connector = UartConnector.init(cxxrtl, @embedFile("rom.bin"));
 
     return .{
         .sim_controller = sim_controller,
         .alloc = alloc,
         .cxxrtl = cxxrtl,
         .vcd = vcd,
-        .clock = clock,
-        .reset = reset,
+        .clk = clk,
+        .rst = rst,
         .spi_connector = spi_connector,
-        .uart_connector = uart_connector,
     };
 }
 
@@ -58,9 +54,9 @@ pub fn deinit(self: *SimThread) void {
 
 pub fn run(self: *SimThread) !void {
     self.sim_controller.lock();
-    self.reset.next(true);
+    self.rst.next(true);
     self.cycle();
-    self.reset.next(false);
+    self.rst.next(false);
     self.sim_controller.unlock();
 
     // XXX: We handle barely any of MADCTL, so this is incredibly specific to
@@ -105,7 +101,6 @@ pub fn run(self: *SimThread) !void {
                     state = .MemoryWriteA;
                     col = sc;
                     pag = sp;
-                    self.uart_connector.go();
                 } else {
                     state = .Idle;
                 }
@@ -172,18 +167,17 @@ pub fn run(self: *SimThread) !void {
                 }
             },
         }
-        self.uart_connector.tick();
     }
 
     try self.writeVcd();
 }
 
 fn cycle(self: *SimThread) void {
-    self.clock.next(false);
+    self.clk.next(false);
     self.cxxrtl.step();
     if (self.vcd) |*vcd| vcd.sample();
 
-    self.clock.next(true);
+    self.clk.next(true);
     self.cxxrtl.step();
     if (self.vcd) |*vcd| vcd.sample();
 
