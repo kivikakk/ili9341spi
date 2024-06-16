@@ -1,4 +1,4 @@
-from amaranth import Cat, Module, Signal
+from amaranth import Cat, ClockSignal, Module, Signal
 from amaranth.lib import data, stream, wiring  # type: ignore
 from amaranth.lib.wiring import In, Out
 
@@ -83,7 +83,7 @@ class Lcd(wiring.Component):
                     m.next = "rcv"
 
         with m.If(~fsm.ongoing("idle")):
-            m.d.comb += self.pin.clk.eq(1)
+            m.d.comb += self.pin.clk.eq(~ClockSignal("sync"))
             m.d.sync += sr.eq(Cat(self.pin.cipo, sr[:7]))
 
         return m

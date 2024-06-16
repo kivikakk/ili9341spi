@@ -281,26 +281,29 @@ class Top(wiring.Component):
             case icebreaker():
                 platform.add_resources([icebreaker_spi_lcd])
                 plat_spi = platform.request("spi_lcd", dir={
-                    "clk": "-",
-                    "copi": "-",
-                    "dc": "-",
+                    # "clk": "-",
+                    # "copi": "-",
+                    # "dc": "-",
                     "cipo": "-",
                 })
                 m.d.comb += [
+                    plat_spi.clk.o.eq(ili.clk),
+                    plat_spi.copi.o.eq(ili.copi),
+                    plat_spi.dc.o.eq(ili.dc),
                     plat_spi.res.o.eq(res),
                     plat_spi.blk.o.eq(blk),
                 ]
-                m.submodules.ddr_clk = ddr_clk = io.DDRBuffer("o", plat_spi.clk)
-                m.d.comb += [
-                    ddr_clk.o[0].eq(0),
-                    ddr_clk.o[1].eq(ili.clk),
-                ]
+                # m.submodules.ddr_clk = ddr_clk = io.DDRBuffer("o", plat_spi.clk)
+                # m.d.comb += [
+                #     ddr_clk.o[0].eq(ili.clk),
+                #     ddr_clk.o[1].eq(ili.clk),
+                # ]
 
-                m.submodules.ff_copi = ff_copi = io.FFBuffer("o", plat_spi.copi)
-                m.d.comb += ff_copi.o.eq(ili.copi)
+                # m.submodules.ff_copi = ff_copi = io.FFBuffer("o", plat_spi.copi)
+                # m.d.comb += ff_copi.o.eq(ili.copi)
 
-                m.submodules.ff_dc = ff_dc = io.FFBuffer("o", plat_spi.dc)
-                m.d.comb += ff_dc.o.eq(ili.dc)
+                # m.submodules.ff_dc = ff_dc = io.FFBuffer("o", plat_spi.dc)
+                # m.d.comb += ff_dc.o.eq(ili.dc)
 
                 m.submodules.ff_cipo = ff_cipo = io.FFBuffer("i", plat_spi.cipo)
                 m.d.comb += ili.cipo.eq(ff_cipo.i)
