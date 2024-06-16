@@ -112,6 +112,7 @@ class Top(wiring.Component):
             now_cells_rd.addr.eq(now_cells_addr),
             now_cells_wr.addr.eq(now_cells_addr),
         ]
+        m.d.sync += now_cells_wr.en.eq(0)
 
         m.submodules.next_cells = next_cells = Memory(shape=1, depth=GOL_CELLCNT, init=[])
         next_cells_rd = next_cells.read_port()
@@ -121,6 +122,7 @@ class Top(wiring.Component):
             next_cells_rd.addr.eq(next_cells_addr),
             next_cells_wr.addr.eq(next_cells_addr),
         ]
+        m.d.sync += next_cells_wr.en.eq(0)
 
         col = Signal(range(LCD_WIDTH))
         pag = Signal(range(LCD_HEIGHT))
@@ -175,11 +177,15 @@ class Top(wiring.Component):
                 with lcd.command.req.Send(m, req):
                     m.next = "load"
 
+            ## render
+
             with m.State("load"):
                 m.d.sync += now_cells_addr.eq(cell_ix_at(cell_x, cell_y))
                 m.next = "load_wait"
+
             with m.State("load_wait"):
                 m.next = "render"
+
             with m.State("render"):
                 m.d.comb += [
                     req.data.eq(Mux(now_cells_rd.data, 0xff, 0x00)),
@@ -187,6 +193,7 @@ class Top(wiring.Component):
                 ]
                 with lcd.command.req.Send(m, req):
                     m.next = "render2"
+
             with m.State("render2"):
                 m.d.comb += [
                     req.data.eq(Mux(now_cells_rd.data, 0xff, 0x00)),
@@ -204,11 +211,88 @@ class Top(wiring.Component):
                             m.d.sync += pag.eq(pag + 1)
                     with m.Else():
                         m.d.sync += col.eq(col + 1)
+   
+            ## evolve
 
             with m.State("evolve_start"):
-                pass
-                # TODO NEXT: add zig mode to niar cxxrtl, test that we render
-                # the initial state, then continue.
+                m.d.sync += [
+                    pl_ix.eq(0),
+                    neighbours_alive.eq(0),
+                ]
+                m.next = "evolve_load"
+
+            with m.State("evolve_load"):
+                with m.Switch(pl_ix):
+                    with m.Case(0): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 0, pag + 0))
+                    with m.Case(1): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 1, pag + 0))
+                    with m.Case(2): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 2, pag + 0))
+                    with m.Case(3): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 0, pag + 1))
+                    with m.Case(4): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 1, pag + 1))
+                    with m.Case(5): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 2, pag + 1))
+                    with m.Case(6): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 0, pag + 2))
+                    with m.Case(7): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 1, pag + 2))
+                    with m.Case(8): m.d.sync += now_cells_addr.eq(cell_ix_at(col + 2, pag + 2))
+                m.next = "evolve_wait"
+
+            with m.State("evolve_wait"):
+                m.next = "evolve_part"
+
+            with m.State("evolve_part"):
+                with m.If(pl_ix == 4):
+                    m.d.sync += was_alive.eq(now_cells_rd.data)
+                with m.Else():
+                    m.d.sync += neighbours_alive.eq(neighbours_alive + now_cells_rd.data)
+
+                with m.If(pl_ix != 8):
+                    m.d.sync += pl_ix.eq(pl_ix + 1)
+                    m.next = "evolve_load"
+                with m.Else():
+                    m.next = "evolve_write"
+
+            with m.State("evolve_write"):
+                m.d.sync += [
+                    next_cells_addr.eq(direct_cell_ix),
+                    next_cells_wr.en.eq(1),
+                ]
+
+                with m.If(was_alive):
+                    m.d.sync += next_cells_wr.data.eq((neighbours_alive == 2) | (neighbours_alive == 3))
+                with m.Else():
+                    m.d.sync += next_cells_wr.data.eq(neighbours_alive == 3)
+
+                m.next = "evolve_start"
+                m.d.sync += col.eq(col + 1)
+                with m.If(col == (GOL_WIDTH - 1)):
+                    m.d.sync += col.eq(0)
+                    m.d.sync += pag.eq(pag + 1)
+                    with m.If(pag == (GOL_HEIGHT - 1)):
+                        m.d.sync += pag.eq(0)
+                        m.next = "transition_load"
+
+            ## transition
+
+            with m.State("transition_load"):
+                m.d.sync += next_cells_addr.eq(direct_cell_ix)
+                m.next = "transition_wait"
+
+            with m.State("transition_wait"):
+                m.next = "transition_write"
+
+            with m.State("transition_write"):
+                m.d.sync += [
+                    now_cells_addr.eq(direct_cell_ix),
+                    now_cells_wr.en.eq(1),
+                    now_cells_wr.data.eq(next_cells_rd.data),
+                ]
+
+                m.next = "transition_load"
+                m.d.sync += col.eq(col + 1)
+                with m.If(col == (GOL_WIDTH - 1)):
+                    m.d.sync += col.eq(0)
+                    m.d.sync += pag.eq(pag + 1)
+                    with m.If(pag == (GOL_HEIGHT - 1)):
+                        m.d.sync += pag.eq(0)
+                        m.next = "initiate"
 
         match platform:
             case icebreaker():

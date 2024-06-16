@@ -6,7 +6,8 @@ __all__ = ["icebreaker", "ulx3s", "cxxrtl"]
 
 
 class icebreaker(ICEBreakerPlatform):
-    pass
+    default_clk = "SB_HFOSC"
+    hfosc_div = 1
 
 
 class ulx3s(ULX3S_45F_Platform):
