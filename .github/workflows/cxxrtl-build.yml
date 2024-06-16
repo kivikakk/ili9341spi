@@ -1,4 +1,4 @@
-name: cxxrtl build
+name: CXXRTL build
 
 on:
   push:

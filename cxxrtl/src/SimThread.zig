@@ -167,7 +167,6 @@ pub fn run(self: *SimThread) !void {
                 }
             },
         }
-        self.uart_connector.tick();
     }
 
     try self.writeVcd();

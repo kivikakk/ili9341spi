@@ -11,26 +11,23 @@ permissions:
 
 jobs:
   synthesis:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
         board:
         - icebreaker
-        - ulx3s-45f
+        - ulx3s
 
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Set up Chryse
-      uses: chryse-hdl/setup-chryse@v2
-      with:
-        source-ref: main
-        athena-source-ref: main
-        install-oss-cad-suite: true
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install pip dependencies
+      run: pip install --editable .
+
+    - uses: kivikakk/niar/setup-action@main
 
     - name: Elaborate and synthesise
-      run: sbt 'run build -b ${{ matrix.board }}'
+      run: python -m ili9341spi build -b ${{ matrix.board }}
