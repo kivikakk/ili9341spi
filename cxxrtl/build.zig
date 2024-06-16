@@ -22,8 +22,11 @@ pub fn build(b: *std.Build) void {
     sdlsdk.link(exe, .dynamic);
     exe.root_module.addImport("sdl2", sdlsdk.getWrapperModule());
 
-    const zxxrtl_mod = b.dependency("zxxrtl", .{ .target = target, .optimize = optimize }).module("zxxrtl");
-    zxxrtl_mod.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include/backends/cxxrtl/runtime", .{yosys_data_dir}) });
+    const zxxrtl_mod = b.dependency("zxxrtl", .{
+        .target = target,
+        .optimize = optimize,
+        .yosys_data_dir = yosys_data_dir,
+    }).module("zxxrtl");
     exe.root_module.addImport("zxxrtl", zxxrtl_mod);
 
     var it = std.mem.split(u8, cxxrtl_o_paths, ",");
