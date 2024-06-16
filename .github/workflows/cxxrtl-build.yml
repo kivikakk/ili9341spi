@@ -24,6 +24,15 @@ jobs:
     - name: Install pip dependencies
       run: pip install --editable .
 
+    - name: Checkout niar
+      uses: actions/checkout@v4
+      with:
+        repository: kivikakk/niar
+        path: vendor/niar
+
+    - name: Install niar
+      run: cd vendor/niar && pip install .
+
     - name: Checkout amaranth-stdio
       uses: actions/checkout@v4
       with:
