@@ -8,7 +8,8 @@ __all__ = ["icebreaker", "ulx3s", "cxxrtl"]
 
 
 class icebreaker(ICEBreakerPlatform):
-    if not os.getenv("GITHUB_ACTIONS"):
+    if False: # XXX: testing DDR SPI and this would make us run probably-too-fast for the LCD>
+    # if not os.getenv("GITHUB_ACTIONS"):
         # XXX: This meets timing when I build locally, but not on CI?!
         # https://github.com/kivikakk/ili9341spi/actions/runs/9535281535/job/26280812013?pr=1
         default_clk = "SB_HFOSC"

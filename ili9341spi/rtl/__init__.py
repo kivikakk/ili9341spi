@@ -1,4 +1,4 @@
-from amaranth import Module, Mux, Signal
+from amaranth import ClockSignal, Module, Mux, Signal
 from amaranth.build import Attrs, Pins, PinsN, Resource, Subsignal
 from amaranth.lib import wiring
 from amaranth.lib.cdc import FFSynchronizer
@@ -16,41 +16,25 @@ from .lcd import Lcd
 __all__ = ["Top"]
 
 
-icebreaker_spi_lcd = Resource(
-    "spi_lcd",
-    0,
-    Subsignal(
-        "clk", Pins("3", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")
-    ),
-    Subsignal(
-        "copi", Pins("4", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")
-    ),
-    Subsignal(
-        "res", PinsN("7", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")
-    ),
-    Subsignal(
-        "dc", PinsN("8", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")
-    ),
-    Subsignal(
-        "blk", Pins("9", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")
-    ),
-    Subsignal(
-        "cipo", Pins("10", dir="i", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")
-    ),
+icebreaker_spi_lcd = Resource("spi_lcd", 0,
+    Subsignal("clk",  Pins("3", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("copi", Pins("4", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("res",  PinsN("7", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("dc",   PinsN("8", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("blk",  Pins("9", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+    Subsignal("cipo", Pins("10", dir="i", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
 )
 
 
 class Top(wiring.Component):
     def __init__(self, platform):
         if isinstance(platform, cxxrtl):
-            super().__init__(
-                {
-                    "lcd": Out(Lcd.PinSignature),
-                    "lcd_res": Out(1),
-                    "uart_rx": In(1),
-                    "uart_tx": Out(1),
-                }
-            )
+            super().__init__({
+                "lcd": Out(Lcd.PinSignature),
+                "lcd_res": Out(1),
+                "uart_rx": In(1),
+                "uart_tx": Out(1),
+            })
         else:
             super().__init__({})
 
@@ -102,7 +86,8 @@ class Top(wiring.Component):
             "\n", ""
         )
 
-        m.submodules.now_cells = now_cells = Memory(shape=1, depth=GOL_CELLCNT, init=[c != "." for c in start])
+        m.submodules.now_cells = now_cells = \
+            Memory(shape=1, depth=GOL_CELLCNT, init=[c != "." for c in start])
         now_cells_rd = now_cells.read_port()
         now_cells_wr = now_cells.write_port()
         now_cells_addr = Signal.like(now_cells_rd.addr)
@@ -304,6 +289,11 @@ class Top(wiring.Component):
                     plat_spi.blk.o.eq(blk),
                     ili.cipo.eq(plat_spi.cipo.i),
                 ]
+
+                platform.add_resources([Resource("pmod_clk_out", 0,
+                    Subsignal("clk", Pins("1", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),
+                )])
+                m.d.comb += platform.request("pmod_clk_out").clk.o.eq(ClockSignal("sync"))
 
                 plat_uart = platform.request("uart")
                 m.d.comb += plat_uart.tx.o.eq(serial.tx.o)
