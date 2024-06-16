@@ -1,17 +1,16 @@
 from amaranth import ClockSignal, Module, Mux, Signal
 from amaranth.build import Attrs, Pins, PinsN, Resource, Subsignal
-from amaranth.lib import io, wiring
+from amaranth.lib import wiring
 from amaranth.lib.cdc import FFSynchronizer
 from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import In, Out
 from amaranth_stdio.serial import AsyncSerial
 
-from ili9341spi.rtl.proto import LcdCommand
-
 from ..targets import cxxrtl, icebreaker, ulx3s
 from . import streamext as _
 from .initter import Initter
 from .lcd import Lcd
+from .proto import LcdCommand
 
 __all__ = ["Top"]
 
@@ -280,33 +279,15 @@ class Top(wiring.Component):
         match platform:
             case icebreaker():
                 platform.add_resources([icebreaker_spi_lcd])
-                plat_spi = platform.request("spi_lcd", dir={
-                    # "clk": "-",
-                    # "copi": "-",
-                    # "dc": "-",
-                    "cipo": "-",
-                })
+                plat_spi = platform.request("spi_lcd")
                 m.d.comb += [
                     plat_spi.clk.o.eq(ili.clk),
                     plat_spi.copi.o.eq(ili.copi),
                     plat_spi.dc.o.eq(ili.dc),
                     plat_spi.res.o.eq(res),
                     plat_spi.blk.o.eq(blk),
+                    ili.cipo.eq(plat_spi.cipo.i),
                 ]
-                # m.submodules.ddr_clk = ddr_clk = io.DDRBuffer("o", plat_spi.clk)
-                # m.d.comb += [
-                #     ddr_clk.o[0].eq(ili.clk),
-                #     ddr_clk.o[1].eq(ili.clk),
-                # ]
-
-                # m.submodules.ff_copi = ff_copi = io.FFBuffer("o", plat_spi.copi)
-                # m.d.comb += ff_copi.o.eq(ili.copi)
-
-                # m.submodules.ff_dc = ff_dc = io.FFBuffer("o", plat_spi.dc)
-                # m.d.comb += ff_dc.o.eq(ili.dc)
-
-                m.submodules.ff_cipo = ff_cipo = io.FFBuffer("i", plat_spi.cipo)
-                m.d.comb += ili.cipo.eq(ff_cipo.i)
 
                 platform.add_resources([Resource("pmod_clk_out", 0,
                     Subsignal("clk", Pins("1", dir="o", conn=("pmod", 0)), Attrs(IO_STANDARD="SB_LVCMOS")),

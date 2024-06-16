@@ -1,5 +1,5 @@
 from amaranth import Cat, ClockSignal, Module, Signal
-from amaranth.lib import data, stream, wiring  # type: ignore
+from amaranth.lib import data, stream, wiring
 from amaranth.lib.wiring import In, Out
 
 __all__ = ["Lcd"]
@@ -72,8 +72,7 @@ class Lcd(wiring.Component):
                     m.next = "rcv_end"
 
             with m.State("rcv_end"):
-                # XXX no support for backpressure, probably violates `stream`
-                # policy.
+                # XXX no support for backpressure, probably violates `stream` policy.
                 self.cmd.resp.enq(m, sr)
                 m.d.sync += rcv_byte_rem.eq(rcv_byte_rem - 1)
 
