@@ -45,7 +45,7 @@ pub fn main() !void {
     var img_data: SimThread.ImgData = undefined;
 
     while (sim_controller.lockIfRunning()) {
-        const cycles_now = sim_controller.cycleNumber();
+        const cycles_now = sim_controller.tickNumber() >> 1;
         var updated_img_data = false;
 
         {

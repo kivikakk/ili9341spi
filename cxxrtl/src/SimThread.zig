@@ -55,7 +55,8 @@ pub fn deinit(self: *SimThread) void {
 pub fn run(self: *SimThread) !void {
     self.sim_controller.lock();
     self.rst.next(true);
-    self.cycle();
+    self.tick();
+    self.tick();
     self.rst.next(false);
     self.sim_controller.unlock();
 
@@ -82,7 +83,7 @@ pub fn run(self: *SimThread) !void {
 
     while (self.sim_controller.lockIfRunning()) {
         defer self.sim_controller.unlock();
-        self.cycle();
+        self.tick();
 
         switch (self.spi_connector.tick()) {
             .Nop => {},
@@ -155,7 +156,6 @@ pub fn run(self: *SimThread) !void {
                             if (pag == ep) {
                                 col = sc;
                                 pag = sp;
-                                std.debug.print("MemoryWriteB wrapped\n", .{});
                             } else {
                                 pag += 1;
                                 col = sc;
@@ -172,16 +172,12 @@ pub fn run(self: *SimThread) !void {
     try self.writeVcd();
 }
 
-fn cycle(self: *SimThread) void {
-    self.clk.next(false);
+fn tick(self: *SimThread) void {
+    self.clk.next(!self.clk.curr());
     self.cxxrtl.step();
     if (self.vcd) |*vcd| vcd.sample();
 
-    self.clk.next(true);
-    self.cxxrtl.step();
-    if (self.vcd) |*vcd| vcd.sample();
-
-    self.sim_controller.cycle_number += 1;
+    self.sim_controller.tick_number += 1;
 }
 
 fn writeVcd(self: *SimThread) !void {

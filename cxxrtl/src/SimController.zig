@@ -10,7 +10,7 @@ vcd_out: ?[]const u8,
 state: SimThread,
 mutex: std.Thread.Mutex = .{},
 running: bool = true,
-cycle_number: usize = 0,
+tick_number: usize = 0,
 
 pub fn start(alloc: std.mem.Allocator, vcd_out: ?[]const u8) !*SimController {
     var sim_controller = try alloc.create(SimController);
@@ -53,8 +53,8 @@ pub fn unlock(self: *SimController) void {
     self.mutex.unlock();
 }
 
-pub fn cycleNumber(self: *const SimController) usize {
-    return self.cycle_number;
+pub fn tickNumber(self: *const SimController) usize {
+    return self.tick_number;
 }
 
 pub fn maybeUpdateImgData(self: *SimController, img_data: *SimThread.ImgData) bool {
