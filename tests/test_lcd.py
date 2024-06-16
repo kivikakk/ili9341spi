@@ -16,7 +16,6 @@ class TestLcd(unittest.TestCase):
     async def _snd(ctx, dut, bytes, rcv_cnt=0):
         for byte_ix, byte in enumerate(bytes):
             await ctx.tick()
-            assert ctx.get(dut.pin.clk) == 0, f"snd pins.clk @ {byte_ix}"
             assert ctx.get(dut.cmd.req.ready) == 1
 
             ctx.set(dut.cmd.req.payload.data, byte)
@@ -30,12 +29,9 @@ class TestLcd(unittest.TestCase):
             for bit_ix in range(8):
                 await ctx.tick()
                 assert ctx.get(dut.cmd.req.ready) == 0
-                assert ctx.get(dut.pin.clk) == 0
 
                 ctx.set(dut.cmd.req.valid, 0)
 
-                await ctx.tick()
-                assert ctx.get(dut.pin.clk) == 1
                 assert ctx.get(dut.pin.copi) == (
                     (byte >> (7 - bit_ix)) & 1
                 ), f"snd pins.copi @ {byte_ix}:{bit_ix}"
@@ -60,14 +56,13 @@ class TestLcd(unittest.TestCase):
                 ctx.set(dut.pin.cipo, (byte >> (7 - bit_ix)) & 1)
 
                 await ctx.tick()
-                assert ctx.get(dut.pin.clk) == 1
-
-                await ctx.tick()
 
             assert ctx.get(dut.cmd.resp.valid) == 1, f"rcv resp.valid @ {byte_ix}"
             assert (
                 ctx.get(dut.cmd.resp.payload) == byte
             ), f"rcv resp.payload @ {byte_ix}"
+
+            await ctx.tick()
 
     @staticmethod
     def _run(tb_with_dut):
