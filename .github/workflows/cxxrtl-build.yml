@@ -24,6 +24,15 @@ jobs:
     - name: Install pip dependencies
       run: pip install --editable .
 
+    - name: Checkout amaranth-stdio
+      uses: actions/checkout@v4
+      with:
+        repository: amaranth-lang/amaranth-stdio
+        path: vendor/amaranth-stdio
+
+    - name: Install amaranth-stdio
+      run: cd vendor/amaranth-stdio && pip install .
+
     - name: Install SDL
       run: sudo apt-get install -y libsdl2-dev
 
