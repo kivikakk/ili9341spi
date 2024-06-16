@@ -28,6 +28,9 @@ jobs:
       run: pip install --editable .
 
     - uses: kivikakk/niar/setup-action@main
+      with:
+        install-oss-cad-suite: true
+        github-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Elaborate and synthesise
       run: python -m ili9341spi build -b ${{ matrix.board }}
